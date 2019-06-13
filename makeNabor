@@ -1,0 +1,11 @@
+LIBFLAGS:=  -lpq -lpthread
+CPPFLAGS:= -I/usr/include/postgresql --std=c++11 -Wall 
+
+Nabor: Pgsql.o Nabor.o ./lib/Pgsql.h
+	$(CXX) -o ./bin/Nabor Nabor.o ./lib/Pgsql.o $(LIBFLAGS) 
+
+Nabor.o:	Nabor.cpp 
+	$(CXX) -c $(CPPFLAGS) Nabor.cpp
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o

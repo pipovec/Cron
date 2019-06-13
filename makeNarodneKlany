@@ -1,0 +1,11 @@
+LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lpq 
+CPPFLAGS:=  --std=c++11 -Wall -o3 -I/usr/include/postgresql
+
+NarodneKlany: NarodneKlany.o Pgsql.o ./lib/Pgsql.h
+	$(CXX) -o ./bin/NarodneKlany ./NarodneKlany.o  ./lib/Pgsql.o $(LIBFLAGS)
+
+NarodneKlany.o:	NarodneKlany.cpp
+	$(CXX) -c $(CPPFLAGS) NarodneKlany.cpp -o ./NarodneKlany.o
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o

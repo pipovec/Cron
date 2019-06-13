@@ -1,0 +1,17 @@
+
+LIBFLAGS:= -L/usr/lib/x86_64-linux-gnu -lpq -lcurl -lpthread -fPIC
+CPPFLAGS:= --std=c++11 -Wall -I/usr/include/postgresql -fPIC
+
+
+PlayersStat: SendCurl.o Pgsql.o PlayersStat.o  ./lib/SendCurl.h  ./lib/Pgsql.h
+	$(CXX)  -o  ./bin/PlayersStat PlayersStat.o ./lib/SendCurl.o  ./lib/Pgsql.o $(LIBFLAGS)
+
+SendCurl.o:	./lib/SendCurl.cpp   
+	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp  -o ./lib/SendCurl.o
+
+PlayersStat.o:	PlayersStat.cpp 
+	$(CXX) -c $(CPPFLAGS) PlayersStat.cpp
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o
+ 

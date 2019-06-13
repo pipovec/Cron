@@ -1,0 +1,10 @@
+LIBFLAGS:=  -lpq -lpthread
+CPPFLAGS:= -I/usr/include/postgresql --std=c++11 -Wall 
+
+Kontrola: KontrolaCSKlanov.o
+	$(CXX) -o ./bin/KontrolaCSKlanov KontrolaCSKlanov.o $(LIBFLAGS) 
+
+KontrolaCSKlanov.o: KontrolaCSKlanov.cpp
+	$(CXX) $(CPPFLAGS) -c KontrolaCSKlanov.cpp
+
+
