@@ -24,24 +24,27 @@ static timestamp_t get_timestamp ()
 void Truncate()
 {
     const char *sql = "truncate nabor_new";
-    Pgsql pgsql;
-    pgsql.Query(sql);
+    Pgsql *pg = new Pgsql;
+    pg->Query(sql);
+    delete pg;
+    
 }
 
 void Vacuum()
 {
     const char *sql = "vacuum full analyze nabor_new";
-    Pgsql pgsql;
-    pgsql.Query(sql);
+    Pgsql *pg = new Pgsql;
+    pg->Query(sql);
+    delete pg;
 }
 
 /* Vyberie zakladne informacie o hracoch */
 PGresult *Query1()
 {
-    Pgsql pgsql;
+    Pgsql *pg = new Pgsql;    
+    const char *sql = "select pi.account_id, pa.nickname, pi.global_rating, wn8 from players_info pi left join players_all pa on pa.account_id = pi.account_id left join wn8player wn on wn.account_id = pi.account_id where pa.clan_id = 0  and wn8 > 800";
+    return pg->Query(sql);
     
-    const char *sql = "select pi.account_id, pa.nickname, pi.global_rating, wn8 from players_info pi left join players_all pa on pa.account_id = pi.account_id left join wn8player wn on wn.account_id = pi.account_id where pa.clan_id = 0 and pi.client_language = 'cs' and wn8 > 800";
-    return pgsql.Query(sql);
 }
 
 void UlozZakladHracov()
@@ -71,8 +74,9 @@ void UlozZakladHracov()
     value.erase(value.end()-1); // Vymaze poslednu ciarku
     
     insert = insert + value;
-    Pgsql vloz;
-    vloz.Query(insert.c_str());
+    Pgsql *vloz = new Pgsql;
+    vloz->Query(insert.c_str());
+    delete vloz;
     
 
 }
@@ -80,19 +84,20 @@ void UlozZakladHracov()
 /* Updatne battles all,skirmish,stronghold */
 void Update1()
 {
-    Pgsql update1;
-    PGconn *conn;
+    Pgsql *pg = new Pgsql;    
     PGresult *data1; 
-    string query1 = "select psa.account_id, psa.battles,psa.wins, pss.battles,psd.battles FROM players_stat_all  psa left join players_stat_skirmish pss on psa.account_id = pss.account_id left join players_stat_defense psd on psa.account_id = psd.account_id where psa.account_id IN (select account_id from nabor_new)";
-    string account_id,battles_all,wins,skirmish,stronghold,update;
+    PGconn *conn;
+    conn = pg->Get();
+
+    string query1 = "select account_id, battles, wins FROM ps_all where account_id IN (select account_id from nabor_new)";
+    string account_id,battles_all,wins,update;
     int riadkov, i;
-    string BattlesAll(PGconn *conn, string account_id);
+
     string Winrate(string battles_all, string wins);
 
-    data1 = update1.Query(query1.c_str());
+    data1 = pg->Query(query1.c_str());
     riadkov = PQntuples(data1);
-
-    conn = update1.Get();
+    
 
     
     for(i = 0; i < riadkov; i++)
@@ -100,14 +105,12 @@ void Update1()
         account_id  = PQgetvalue(data1,i,0);
         battles_all = PQgetvalue(data1,i,1);
         wins        = PQgetvalue(data1,i,2);
-        skirmish    = PQgetvalue(data1,i,3);
-        stronghold  = PQgetvalue(data1,i,4);
         
         wins        = Winrate(battles_all, wins);
 
-        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  ", battles_sk = "+ skirmish + ", battles_sr = "+stronghold+" WHERE account_id =" + account_id;
+        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  " WHERE account_id =" + account_id;
         PQexec(conn,update.c_str());
-        update.clear();battles_all.clear();wins.clear();skirmish.clear();stronghold.clear();account_id.clear();
+        update.clear();battles_all.clear();wins.clear();account_id.clear();
     }
     PQclear(data1);PQfinish(conn);
 }
@@ -130,9 +133,10 @@ string Winrate(string battles_all, string wins)
 /* Druha faza updatu naboru */
 void Update2()
 {
-    Pgsql pgsql;
-    PGconn *conn1,*conn2,*conn3, *update;
+    Pgsql *pg = new Pgsql;
+    PGconn *conn1;
     PGresult *data; 
+
     string query = "select account_id from nabor_new";
     string account_id;string *p_account_id; p_account_id = &account_id;
     string resultx; string *p_resultx; p_resultx = &resultx;
@@ -145,32 +149,28 @@ void Update2()
     void Level6(PGconn *conn, string *account_id, string *result6);
 
     int i,riadkov;
-    conn1 = pgsql.Get();conn2 = pgsql.Get();conn3 = pgsql.Get();update = pgsql.Get(); // Ziskam spojenie do databazy
+    conn1 = pg->Get();// Ziskam spojenie do databazy
     data    = PQexec(conn1,query.c_str()); // Poslem dotaz do databazy
 
     riadkov = PQntuples(data); // zistim pocet riadkov
-
-
-
+    
     for(i = 0; i < riadkov; i++) // zacnem prechadzat account_id a ziskavat k nim data 
     {
         *p_account_id  = PQgetvalue(data,i,0);
+    
+
+        LevelX(conn1,p_account_id,p_resultx);
+        Level8(conn1,p_account_id,p_result8);
+        Level6(conn1,p_account_id,p_result6);
+
+        sql_update = "UPDATE nabor_new SET pocet_x = " + resultx + ", pocet_8 = " + result8 + ", pocet_6 = " + result6 + " WHERE account_id = " + account_id;        
+        PQexec(conn1, sql_update.c_str());
         
-
-        thread T1(LevelX,conn1,p_account_id,p_resultx);
-        thread T2(Level8,conn2,p_account_id,p_result8);
-        thread T3(Level6,conn3,p_account_id,p_result6);
-
-        T1.join();
-        T2.join();
-        T3.join();
-
-        sql_update = "UPDATE nabor_new SET pocet_x = " + resultx + ", pocet_8 = " + result8 + ", pocet_6 = " + result6 + " WHERE account_id = " + account_id;
-        PQexec(update, sql_update.c_str());
         sql_update.clear();resultx.clear();result8.clear();result6.clear();account_id.clear();
 
     }
-    PQclear(data);PQfinish(conn1);PQfinish(conn2);PQfinish(conn3);
+
+    PQclear(data);PQfinish(conn1);
 
 }
 
@@ -181,11 +181,11 @@ void LevelX(PGconn *conn, string *account_id, string *resultx)
     string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 10) and account_id = ";
     PGresult *res;
 
-    sql = sql + *account_id;
-
+    sql = sql + *account_id;    
     res = PQexec(conn, sql.c_str());
     *resultx = PQgetvalue(res,0,0);
     PQclear(res);sql.clear();
+    
 }
 
 void Level8(PGconn *conn, string *account_id, string *result8)
@@ -194,10 +194,11 @@ void Level8(PGconn *conn, string *account_id, string *result8)
     PGresult *res;
 
     sql = sql + *account_id;
-
+    
     res = PQexec(conn, sql.c_str());
     *result8 = PQgetvalue(res,0,0);
     PQclear(res);sql.clear();
+    
 }
 
 void Level6(PGconn *conn, string *account_id, string *result6)
@@ -206,17 +207,18 @@ void Level6(PGconn *conn, string *account_id, string *result6)
     PGresult *res;
 
     sql = sql + *account_id;
-
+    
     res = PQexec(conn, sql.c_str());
     *result6 = PQgetvalue(res,0,0);
     PQclear(res);
+  
 }
 
 string BattlesAll(PGconn *conn, string account_id)
 {
     PGresult *res;
     string result;
-    string sql = "select battles from players_stat_all where account_id = " + account_id;
+    string sql = "select battles from ps_all where account_id = " + account_id;
     
     res = PQexec(conn, sql.c_str());
     result = PQgetvalue(res,0,0); 
@@ -229,6 +231,7 @@ void Update3()
 {
     Pgsql pgsql;
     PGconn *conn;
+
     PGresult *data, *result; 
     string query = "select account_id from nabor_new";  
     string account_id;string *p_account_id; p_account_id = &account_id;
@@ -266,10 +269,10 @@ void Update3()
 
 void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data14, string *p_data30,string *avgxp)
 {
-    string query7  = "select sum(battles) from players_stat_all_history where date > now() - interval \'7 day\' and account_id = " + *p_account_id;
-    string query14 = "select sum(battles) from players_stat_all_history where date > now() - interval \'14 day\' and account_id = " + *p_account_id;
-    string query30 = "select sum(battles) from players_stat_all_history where date > now() - interval \'30 day\' and account_id = " + *p_account_id;
-    string queryxp   = "select battle_avg_xp from players_stat_all where account_id = " + *p_account_id;
+    string query7  = "select sum(battles) from ps_all_history where date > now() - interval \'7 day\' and account_id = " + *p_account_id;
+    string query14 = "select sum(battles) from ps_stat_all_history where date > now() - interval \'14 day\' and account_id = " + *p_account_id;
+    string query30 = "select sum(battles) from ps_stat_all_history where date > now() - interval \'30 day\' and account_id = " + *p_account_id;
+    string queryxp   = "select battle_avg_xp from ps_stat_all where account_id = " + *p_account_id;
 
     PGresult *result;
 
@@ -312,21 +315,21 @@ int main()
     cout << "Program zacal pracovat: " << ctime(&start) << endl;
     
     /* Vymaze stare udaje z tabulky nabor_new */
-    void Truncate();
-    Truncate();
+    //void Truncate();
+    //Truncate();
 
     /* Ulozi do tabulky zaklad hracov account_id,account_name,wn8,global_rating */
-    void UlozZakladHracov();
-    UlozZakladHracov();
+    //void UlozZakladHracov();
+    //UlozZakladHracov();
     
-    void Update1();
-    Update1();
+    //void Update1();
+    //Update1();
 
     void Update2();
     Update2();
     
-    void Update3();
-    Update3();
+    //void Update3();
+    //Update3();
 
     // Vacuum tabulky nabor_new
     void Vacuum();
