@@ -304,13 +304,13 @@ void UlozHraca(wn8value *p_wn8)
 
     q_delete += del + ")";
     q_insert += ins ;
-    cout << q_delete << endl;
+    //cout << q_delete << endl;
     result = PQexec(conn, q_delete.c_str());
         // if (PQresultStatus(result) != PGRES_TUPLES_OK)
         //        {cout << "DELETE error: " <<  PQresultErrorMessage(result) << endl;}
     PQclear(result);
 
-    cout << q_insert << endl;
+    //cout << q_insert << endl;
     result = PQexec(conn, q_insert.c_str());
         // if (PQresultStatus(result) != PGRES_TUPLES_OK)
         //        {cout << "INSERT error: " <<  PQresultErrorMessage(result) << endl;}
