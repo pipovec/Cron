@@ -1,0 +1,23 @@
+
+LIBFLAGS:= -L/usr/lib/x86_64-linux-gnu -lpq -lcurl -lpthread -fPIC
+CPPFLAGS:= --std=c++11 -Wall -O3 -I/usr/include/postgresql -fPIC
+
+
+PlayersWN8v2: PlayersWN8v2.o SendCurl.o GetPlayersStats.o GetPlayersVehicles.o Pgsql.o  ./lib/SendCurl.h ./lib/GetPlayersStats.h ./lib/GetPlayersVehicles.h ./lib/Pgsql.h  
+	$(CXX)  -o  ./bin/PlayersWN8v2 PlayersWN8v2.o ./lib/Pgsql.o ./lib/GetPlayersStats.o ./lib/GetPlayersVehicles.o ./lib/SendCurl.o $(LIBFLAGS)
+
+PlayersWN8v2.o:	PlayersWN8v2.cpp
+	$(CXX) -c $(CPPFLAGS) PlayersWN8v2.cpp
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o
+
+SendCurl.o:	./lib/SendCurl.cpp   
+	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp  -o ./lib/SendCurl.o
+
+GetPlayersStats.o: ./lib/GetPlayersStats.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/GetPlayersStats.cpp  -o ./lib/GetPlayersStats.o
+
+GetPlayersVehicles.o: ./lib/GetPlayersVehicles.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/GetPlayersVehicles.cpp  -o ./lib/GetPlayersVehicles.o
+
