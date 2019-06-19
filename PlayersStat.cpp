@@ -169,6 +169,7 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
             cout << "Parser 0: " << e.what() << endl;
             
         }
+
         js = js["data"];
 
         json j;
@@ -176,64 +177,66 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
         /** Ziskanie account_id a hodnot */
         for (auto& x : json::iterator_wrapper(js))
         {
+            
             account_id = x.key();            
+            
+            if( !j.is_null()  )
+            {
+                j = x.value();   
 
-            j = x.value();            
-            data = j.dump();            
-             
-            
-            PlayersStat(data,pStatAll,"all");
-            PlayersStat(data,pStatGMc,"globalmap_champion");
-            PlayersStat(data,pStatGMa,"globalmap_absolute");            
-            PlayersStat(data,pStatDef,"stronghold_defense");
-            PlayersStat(data,pStatSkir,"stronghold_skirmish");
-            
-            //TStatAll.join();TStatGMc.join();TStatGMa.join();TStatDef.join();TStatSkir.join();
-            
+                data = j.dump();                
+                
+                PlayersStat(data,pStatAll,"all");
+                PlayersStat(data,pStatGMc,"globalmap_champion");
+                PlayersStat(data,pStatGMa,"globalmap_absolute");            
+                PlayersStat(data,pStatDef,"stronghold_defense");
+                PlayersStat(data,pStatSkir,"stronghold_skirmish");
+                
+                //TStatAll.join();TStatGMc.join();TStatGMa.join();TStatDef.join();TStatSkir.join();
+                
 
+                // Zacne pracovat s databazou 
+                ExecPreparedStatment("players_stat_all",conn,account_id,priadkov,pdStatAll);
+                if(riadkov == 0)
+                { OnlyInsert(conn,"players_stat_all",pStatAll,account_id);} // Vlozim data ktore som ziskal zo servera
+                else
+                { Upsert(conn,"players_stat_all",pStatAll,pdStatAll,account_id);} // Vlozi data nove data a urobi historiu
+                
+                // Stronghold
+                ExecPreparedStatment("players_stat_defense",conn,account_id,priadkov,pdStatDef);
+                if(riadkov == 0)
+                { OnlyInsert(conn,"players_stat_defense",pStatDef,account_id);} 
+                else
+                { Upsert(conn,"players_stat_defense",pStatDef,pdStatDef,account_id);}
+                
+                // Sarvatky
+                ExecPreparedStatment("players_stat_skirmish",conn,account_id,priadkov,pdStatSkir);
+                if(riadkov == 0)
+                { OnlyInsert(conn,"players_stat_skirmish",pStatSkir,account_id);} 
+                else
+                { Upsert(conn,"players_stat_skirmish",pStatSkir,pdStatSkir,account_id);}
+                
+                // Global map X
+                ExecPreparedStatment("players_stat_gm_absolute",conn,account_id,priadkov,pdStatGMa);
+                if(riadkov == 0)
+                { OnlyInsert(conn,"players_stat_gm_absolute",pStatGMa,account_id);} 
+                else
+                { Upsert(conn,"players_stat_gm_absolute",pStatGMa,pdStatGMa,account_id);}
+                
+                // Global map VIII
+                ExecPreparedStatment("players_stat_gm_champion",conn,account_id,priadkov,pdStatGMc);
+                if(riadkov == 0)
+                { OnlyInsert(conn,"players_stat_gm_champion",pStatGMc,account_id);} 
+                else
+                { Upsert(conn,"players_stat_gm_champion",pStatGMc,pdStatGMc,account_id);}
             
-
-            // Zacne pracovat s databazou 
-            ExecPreparedStatment("players_stat_all",conn,account_id,priadkov,pdStatAll);
-            if(riadkov == 0)
-            { OnlyInsert(conn,"players_stat_all",pStatAll,account_id);} // Vlozim data ktore som ziskal zo servera
-            else
-            { Upsert(conn,"players_stat_all",pStatAll,pdStatAll,account_id);} // Vlozi data nove data a urobi historiu
-            
-            // Stronghold
-            ExecPreparedStatment("players_stat_defense",conn,account_id,priadkov,pdStatDef);
-            if(riadkov == 0)
-            { OnlyInsert(conn,"players_stat_defense",pStatDef,account_id);} 
-            else
-            { Upsert(conn,"players_stat_defense",pStatDef,pdStatDef,account_id);}
-            
-            // Sarvatky
-            ExecPreparedStatment("players_stat_skirmish",conn,account_id,priadkov,pdStatSkir);
-            if(riadkov == 0)
-            { OnlyInsert(conn,"players_stat_skirmish",pStatSkir,account_id);} 
-            else
-            { Upsert(conn,"players_stat_skirmish",pStatSkir,pdStatSkir,account_id);}
-            
-            // Global map X
-            ExecPreparedStatment("players_stat_gm_absolute",conn,account_id,priadkov,pdStatGMa);
-            if(riadkov == 0)
-            { OnlyInsert(conn,"players_stat_gm_absolute",pStatGMa,account_id);} 
-            else
-            { Upsert(conn,"players_stat_gm_absolute",pStatGMa,pdStatGMa,account_id);}
-            
-            // Global map VIII
-            ExecPreparedStatment("players_stat_gm_champion",conn,account_id,priadkov,pdStatGMc);
-            if(riadkov == 0)
-            { OnlyInsert(conn,"players_stat_gm_champion",pStatGMc,account_id);} 
-            else
-            { Upsert(conn,"players_stat_gm_champion",pStatGMc,pdStatGMc,account_id);}
-            
-
+            }
         } 
         
+        js = NULL; j=NULL;
 
         
-    PQfinish(conn);
+    //PQfinish(conn);
     }
 }
 
@@ -252,26 +255,34 @@ void PlayersStat(string data, int *Stat, string table)
         cout << "Parser v PlayersStat: " << e.what() << endl;
     }    
     
-    // damage_dealt    
-    Stat[0] = j["statistics"][table]["damage_dealt"].get<int>();    
+    if( !j.is_null() ) 
+    {    
+        try {
+            // damage_dealt                
+            Stat[0] = j["statistics"][table]["damage_dealt"];                
 
-    // spot    
-    Stat[1] = j["statistics"][table]["spotted"].get<int>();
+            // spot    
+            Stat[1] = j["statistics"][table]["spotted"];
 
-    // frag    
-    Stat[2] = j["statistics"][table]["frags"].get<int>();
+            // frag    
+            Stat[2] = j["statistics"][table]["frags"];
 
-    //dropped_capture_points    
-    Stat[3] = j["statistics"][table]["dropped_capture_points"].get<int>();
+            //dropped_capture_points    
+            Stat[3] = j["statistics"][table]["dropped_capture_points"];
 
-    // battles    
-    Stat[4] = j["statistics"][table]["battles"].get<int>();
+            // battles    
+            Stat[4] = j["statistics"][table]["battles"];
 
-    // wins    
-    Stat[5] = j["statistics"][table]["wins"].get<int>();
+            // wins    
+            Stat[5] = j["statistics"][table]["wins"];
 
-    // xp    
-    Stat[6] = j["statistics"][table]["battle_avg_xp"].get<int>();    
+            // xp    
+            Stat[6] = j["statistics"][table]["battle_avg_xp"];    
+        }
+        catch(json::parse_error& e) {
+            cout << "Prazdna hodnota pre : " << table << "Chyba: " << e.what() << endl;                    
+        }
+    }
 
     j= NULL;
    
@@ -440,19 +451,19 @@ int main()
         /* Spracovanie JSON a poslanie dat do databazy */
         if(ntuples > 0)     Json(p_aids1,p_json1,p_ntuples,100);
 
-        cout << "TU SOM "  << endl;
+        //cout << "TU SOM "  << endl;
         if(ntuples > 100)   Json(p_aids2,p_json2,p_ntuples,200);
         if(ntuples > 200)   Json(p_aids3,p_json3,p_ntuples,300);
         if(ntuples > 300)   Json(p_aids4,p_json4,p_ntuples,400);
         if(ntuples > 400)   Json(p_aids5,p_json5,p_ntuples,500);
         
-         cout << "TU " << i << endl;
+        //cout << "TU " << i << endl;
         a_ids.erase(a_ids.begin(), a_ids.end());
         aids1.clear();aids2.clear();aids3.clear();aids4.clear();aids5.clear();
         json1.clear();json2.clear();json3.clear();json4.clear();json5.clear();
         
         spracovanych = spracovanych + ntuples;
-        cout << "spracovanych: " << spracovanych << endl;
+        //cout << "spracovanych: " << spracovanych << endl;
 
         ntuples = 0;
        
