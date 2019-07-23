@@ -131,6 +131,7 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
                         PQerrorMessage(conn));                
             }
         
+        
         string DataHraca(string *aids, string *json, string account_id);
         void PlayersStat(string data, int *pStatAll, string table);
         
@@ -173,17 +174,17 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
         js = js["data"];
 
         json j;
-
+        
         /** Ziskanie account_id a hodnot */
         for (auto& x : json::iterator_wrapper(js))
         {
             
             account_id = x.key();            
             
-            if( !j.is_null()  )
-            {
+            
+            
                 j = x.value();   
-
+                //cout << "Tu som " <<  account_id << endl;
                 data = j.dump();                
                 
                 PlayersStat(data,pStatAll,"all");
@@ -194,7 +195,7 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
                 
                 //TStatAll.join();TStatGMc.join();TStatGMa.join();TStatDef.join();TStatSkir.join();
                 
-
+                //cout << "Tu: " << pdStatAll << endl;
                 // Zacne pracovat s databazou 
                 ExecPreparedStatment("players_stat_all",conn,account_id,priadkov,pdStatAll);
                 if(riadkov == 0)
@@ -230,7 +231,7 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
                 else
                 { Upsert(conn,"players_stat_gm_champion",pStatGMc,pdStatGMc,account_id);}
             
-            }
+            
         } 
         
         js = NULL; j=NULL;
@@ -254,7 +255,9 @@ void PlayersStat(string data, int *Stat, string table)
     }catch(json::parse_error& e) {
         cout << "Parser v PlayersStat: " << e.what() << endl;
     }    
-    
+
+    //cout << "Tu som" << data << endl;    
+
     if( !j.is_null() ) 
     {    
         try {
@@ -282,6 +285,7 @@ void PlayersStat(string data, int *Stat, string table)
         catch(json::parse_error& e) {
             cout << "Prazdna hodnota pre : " << table << "Chyba: " << e.what() << endl;                    
         }
+        
     }
 
     j= NULL;
@@ -361,7 +365,7 @@ void Upsert(PGconn *conn,string table,int *pStat,int *pdStat, string account_id)
 {
     
     PGresult *result;
-    
+        //cout << "Rozdiel: " << pStat[4] << " - " << pdStat[4] << endl;
         if( (pStat[4] - pdStat[4]) > 0){			
 		string insert = "INSERT INTO "+ table +"_history (damage_dealt,spotted,frags,dropped_capture_points,battles,wins,battle_avg_xp,date,account_id) VALUES ("+to_string(pStat[0] - pdStat[0])+","+to_string(pStat[1] - pdStat[1])+
                     ","+to_string(pStat[2] - pdStat[2])+","+to_string(pStat[3] - pdStat[3])+","+to_string(pStat[4] - pdStat[4])+","+to_string(pStat[5] - pdStat[5])+
@@ -386,6 +390,26 @@ void Upsert(PGconn *conn,string table,int *pStat,int *pdStat, string account_id)
     
 }
 
+// Vycisti databazu od zaznamov starsich ako 2 mesiace
+void CleanUp()
+{
+    PGconn *conn;
+    Pgsql *trieda  = new Pgsql();
+    conn = trieda->Get();
+
+    const char *sql     = "DELETE FROM players_stat_all_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_all_history; ";
+    const char *sql1    = "DELETE FROM players_stat_defense_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_defense_history;";
+    const char *sql2    = "DELETE FROM players_stat_gm_absolute_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE  players_stat_gm_absolute_history;";
+    const char *sql3    = "DELETE FROM players_stat_gm_champion_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_gm_champion_history;";
+    const char *sql4    = "DELETE FROM players_stat_skirmish_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_skirmish_history;";
+
+    PQexec(conn, sql);
+    PQexec(conn, sql1);
+    PQexec(conn, sql2);
+    PQexec(conn, sql3);
+    PQexec(conn, sql4);
+    
+}
 
 int main()
 {   
@@ -469,7 +493,7 @@ int main()
        
     }
 
-
+    CleanUp();
 
     timestamp_t t2 = get_timestamp();
     double secs = (t2 - t0) / 2000000.0L;

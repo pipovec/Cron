@@ -120,8 +120,8 @@ void GetAccountId()
 {
         
     PGresult *result;
-    //const char *query = "SELECT account_id FROM ps_all_history WHERE date = current_date - interval '1 days ' AND battles > 0";
-    const char *query  = "SELECT account_id FROM players_all";
+    const char *query = "SELECT account_id FROM players_stat_all_history WHERE date = current_date - interval '1 days ' AND battles > 0";
+    //const char *query  = "SELECT account_id FROM players_all";
     result          = PQexec(conn, query);
          if (PQresultStatus(result) != PGRES_TUPLES_OK)
                 {cout << "GetPlayers: " <<  PQresultErrorMessage(result) << endl;}
@@ -164,7 +164,7 @@ void GetDataFromSever(int number)
     string json_string;
     int x = 1;
     
-    chrono::seconds dura(3); // pausa 3 sec
+    chrono::seconds dura(1); // pausa 3 sec
     
     if(account_id.size() > 0)
     {
