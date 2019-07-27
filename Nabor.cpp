@@ -32,7 +32,7 @@ void Truncate()
 
 void Vacuum()
 {
-    const char *sql = "vacuum full analyze nabor_new";
+    const char *sql = "vacuum analyze nabor_new";
     Pgsql *pg = new Pgsql;
     pg->Query(sql);
     delete pg;
@@ -89,7 +89,7 @@ void Update1()
     PGconn *conn;
     conn = pg->Get();
 
-    string query1 = "select account_id, battles, wins FROM ps_all where account_id IN (select account_id from nabor_new)";
+    string query1 = "select account_id, battles, wins FROM players_stat_all where account_id IN (select account_id from nabor_new)";
     string account_id,battles_all,wins,update;
     int riadkov, i;
 
@@ -218,7 +218,7 @@ string BattlesAll(PGconn *conn, string account_id)
 {
     PGresult *res;
     string result;
-    string sql = "select battles from ps_all where account_id = " + account_id;
+    string sql = "select battles from players_stat_all where account_id = " + account_id;
     
     res = PQexec(conn, sql.c_str());
     result = PQgetvalue(res,0,0); 
@@ -269,10 +269,12 @@ void Update3()
 
 void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data14, string *p_data30,string *avgxp)
 {
-    string query7  = "select sum(battles) from ps_all_history where date > now() - interval \'7 day\' and account_id = " + *p_account_id;
-    string query14 = "select sum(battles) from ps_stat_all_history where date > now() - interval \'14 day\' and account_id = " + *p_account_id;
-    string query30 = "select sum(battles) from ps_stat_all_history where date > now() - interval \'30 day\' and account_id = " + *p_account_id;
-    string queryxp   = "select battle_avg_xp from ps_stat_all where account_id = " + *p_account_id;
+    
+    
+    string query7  = "select sum(battles) from players_stat_all_history where date > now() - interval \'7 day\' and account_id = " + *p_account_id;
+    string query14 = "select sum(battles) from players_stat_all_history where date > now() - interval \'14 day\' and account_id = " + *p_account_id;
+    string query30 = "select sum(battles) from players_stat_all_history where date > now() - interval \'30 day\' and account_id = " + *p_account_id;
+    string queryxp   = "select battle_avg_xp from players_stat_all where account_id = " + *p_account_id;
 
     PGresult *result;
 
@@ -315,21 +317,21 @@ int main()
     cout << "Program zacal pracovat: " << ctime(&start) << endl;
     
     /* Vymaze stare udaje z tabulky nabor_new */
-    //void Truncate();
-    //Truncate();
+    void Truncate();
+    Truncate();
 
     /* Ulozi do tabulky zaklad hracov account_id,account_name,wn8,global_rating */
-    //void UlozZakladHracov();
-    //UlozZakladHracov();
+    void UlozZakladHracov();
+    UlozZakladHracov();
     
     //void Update1();
-    //Update1();
+    Update1();
 
     void Update2();
     Update2();
     
     //void Update3();
-    //Update3();
+    Update3();
 
     // Vacuum tabulky nabor_new
     void Vacuum();
