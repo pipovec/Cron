@@ -243,28 +243,31 @@ void Update3()
 
     conn = pgsql.Get();
     data    = PQexec(conn,query.c_str()); // Poslem dotaz do databazy
-    int riadkov = PQntuples(data); // zistim pocet riadkov
+    int riadkov = PQntuples(data); // zistim pocet riadkov    
     
     void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data14, string *p_data30,string *p_avgxp);
 
     int i;
-    for(i=0; i < riadkov;i++)
+    for(i=0; i < riadkov; i++)
     {
-        account_id = PQgetvalue(data,i,0);
-        History(p_account_id, conn, p_data7,p_data14,p_data30,p_avgxp);
-
-	if(data7.length() > 1 && data14.length() > 1 &&  data30.length() > 1)
-	{
-          sql_update = "UPDATE nabor_new SET last7="+data7+",last14="+data14+",last30="+data30+",avgxp=" + avgxp + " WHERE account_id = " + account_id;
         
-          result = PQexec(conn, sql_update.c_str());
-            if (PQresultStatus(result) != PGRES_COMMAND_OK)
-                {cout << "Chyba update dni: " <<  PQresultErrorMessage(result) << endl;}
-	}
+        account_id = PQgetvalue(data,i,0);
+
+        History(p_account_id, conn, p_data7,p_data14,p_data30,p_avgxp);
+        
+
+        if(data7.length() > 1 && data14.length() > 1 &&  data30.length() > 1)
+        {
+            sql_update = "UPDATE nabor_new SET last7="+data7+",last14="+data14+",last30="+data30+",avgxp=" + avgxp + " WHERE account_id = " + account_id;
+            
+            result = PQexec(conn, sql_update.c_str());
+                if (PQresultStatus(result) != PGRES_COMMAND_OK)
+                    {cout << "Chyba update dni: " <<  PQresultErrorMessage(result) << endl;}
+        }
         sql_update.clear();account_id.clear();data7.clear();data14.clear();data30.clear();
     }
 
-    PQclear(data);PQfinish(conn);
+    PQclear(data);
 }
 
 void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data14, string *p_data30,string *avgxp)
@@ -276,14 +279,15 @@ void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data
     string query30 = "select sum(battles) from players_stat_all_history where date > now() - interval \'30 day\' and account_id = " + *p_account_id;
     string queryxp   = "select battle_avg_xp from players_stat_all where account_id = " + *p_account_id;
 
+    
+
     PGresult *result;
 
     result  = PQexec(conn,query7.c_str());
          if (PQresultStatus(result) != PGRES_TUPLES_OK)
             {cout << "Chyba query7: " <<  PQresultErrorMessage(result) << endl; }
     
-    *p_data7 = PQgetvalue(result,0,0);
-    
+    *p_data7 = PQgetvalue(result,0,0);    
     PQclear(result);
 
     result  = PQexec(conn,query14.c_str());
@@ -298,12 +302,21 @@ void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data
     *p_data30 = PQgetvalue(result,0,0);
     PQclear(result);
 
-    result  = PQexec(conn,queryxp.c_str());
+    // AVG XP
+    result  = PQexec(conn,queryxp.c_str());    
         if (PQresultStatus(result) != PGRES_TUPLES_OK)
             {cout << "Chyba queryxp: " <<  PQresultErrorMessage(result) << endl;}
-    *avgxp = PQgetvalue(result,0,0);
-    PQclear(result);
 
+    int riadkov = PQntuples(result);
+    if(riadkov > 0) {
+        *avgxp = PQgetvalue(result,0,0);
+    }
+    else{
+        *avgxp = '0';
+    }
+    
+    PQclear(result);
+    
 }
 
 
@@ -324,14 +337,17 @@ int main()
     void UlozZakladHracov();
     UlozZakladHracov();
     
-    //void Update1();
+    void Update3();
+    Update3();
+
+    void Update1();
     Update1();
 
     void Update2();
     Update2();
     
     //void Update3();
-    Update3();
+    //Update3();
 
     // Vacuum tabulky nabor_new
     void Vacuum();
