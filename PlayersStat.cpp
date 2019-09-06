@@ -33,19 +33,26 @@ class Players
             
         }
 
+        // Pre Cz/Sk hracov
+        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs)";
+        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OFFSET ";
+
+        // Pre vsetkch hracov v databaze
+        //string basic_query_count = "select count(account_id) from players_all";
+        //string basic_query = "select account_id from players_all offset ";
+
         // Ziskam pocet hracov v databaze
         int GetPocet()
         {
             PGresult *result;
             int i; string res;
 
-            //string query = "SELECT count(*) FROM cz_players"; 
-            string query = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs)" ;
-            result = PQexec(this->conn, query.c_str());
+            result = PQexec(this->conn, basic_query_count.c_str());
                 this->CheckResult(result);            
 
             res = PQgetvalue(result,0,0); 
             PQclear(result);
+
             i   = stoi(res); 
             return i;
         }
@@ -53,9 +60,8 @@ class Players
         // Ziskavanie account_id po 500ks 
         void GetPlayers(int offset, container *account_ids,int *ntuples)
         {
-            PGresult *result;
-            //string query    = "SELECT account_id FROM cz_players OFFSET " + to_string(offset) + " LIMIT 500";
-            string query    = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OFFSET " + to_string(offset) + " LIMIT 500";
+            PGresult *result;            
+            string query    = basic_query + to_string(offset) + " LIMIT 500";
             result          = PQexec(this->conn, query.c_str());
                 this->CheckResult(result); 
             int riadkov     = PQntuples(result);
