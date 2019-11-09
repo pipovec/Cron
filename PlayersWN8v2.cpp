@@ -8,12 +8,12 @@
 #include <unordered_map>
 #include <algorithm>
 #include <queue>
-#include <thread>
+
 
 using namespace std;
 
 // Odkial sa budu brat account_id
-const char* master_query = "SELECT account_id FROM players_all";
+const char* master_query = "SELECT account_id FROM players_all limit 12000";
 
 // Kedy sa maju pocitat WN8
 const int pamataj = 2500;

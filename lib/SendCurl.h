@@ -26,7 +26,7 @@ class SendCurl
             
     
     private:
-            string SendRequest(const char *url, const char *postdata);
+            string SendRequest(string url, string postdata);
             bool SkontrolujStatus(string data);    
             const string server_wgn   = "http://api.worldoftanks.eu/wgn";
             const string server_wot   = "http://api.worldoftanks.eu/wot"; 
