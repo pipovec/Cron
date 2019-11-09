@@ -78,8 +78,7 @@ void SendPost(string clan_id, string *json){
     const char text[] = "&fields=clan_id,members_count,members.account_id,members.account_name,members.joined_at,members.role_i18n&language=cs";
 
     string field(text);
-    int x = 1;
-    chrono::seconds dura(3); // pausa 3 sec
+    int x = 1;    
     
     const string method   = "/clans/info/";
 
@@ -89,12 +88,11 @@ void SendPost(string clan_id, string *json){
 
     do{
         try {
-            *json = send.SendWGN(method, post_data);
+            *json = send.SendWOT(method, post_data);
             x = 0;
         }
         catch(exception& e) {
-            cout << e.what() << endl;
-            this_thread::sleep_for( dura );
+            cout << e.what() << endl;            
             x = 1;
             
         }
@@ -671,9 +669,6 @@ int main(){
 	main2 = chrono::high_resolution_clock::now();
 	chrono::duration<double> elapsed_main = main2-main1;
 
-    /** Pausa pred dalsim kolom na ulozenie databazy */ 
-    chrono::seconds dura(3); // pausa 3 sec
-    this_thread::sleep_for( dura );
     
 	cout << elapsed_main.count() <<" Sucasne kolo: " << i << " Zostava cids: "<< cids.size() << endl;
         
