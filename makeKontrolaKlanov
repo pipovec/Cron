@@ -1,0 +1,14 @@
+LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lcurl  -lpq -lpthread
+CPPFLAGS:=  --std=c++11 -Wall -o3 -I/usr/include/postgresql
+
+KontrolaKlanov: KontrolaKlanov.o SendCurl.o Pgsql.o ./lib/SendCurl.h  ./lib/Pgsql.h
+	$(CXX) -o ./bin/KontrolaKlanov ./KontrolaKlanov.o ./lib/SendCurl.o  ./lib/Pgsql.o $(LIBFLAGS)
+
+KontrolaKlanov.o:	KontrolaKlanov.cpp
+	$(CXX) -c $(CPPFLAGS) KontrolaKlanov.cpp -o ./KontrolaKlanov.o
+
+SendCurl.o:	./lib/SendCurl.cpp   
+	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp  -o ./lib/SendCurl.o
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o

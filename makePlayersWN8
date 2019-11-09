@@ -1,0 +1,13 @@
+
+LIBFLAGS:= -L/usr/lib/x86_64-linux-gnu -lpq
+CPPFLAGS:= --std=c++11 -Wall -O3 -I/usr/include/postgresql
+
+
+PlayersWN8: Pgsql.o PlayersWN8.o  ./lib/Pgsql.h
+	$(CXX)  -o  ./bin/PlayersWN8 PlayersWN8.o ./lib/Pgsql.o $(LIBFLAGS)
+
+PlayersWN8.o:	PlayersWN8.cpp
+	$(CXX) -c $(CPPFLAGS) PlayersWN8.cpp
+
+Pgsql.o: ./lib/Pgsql.cpp
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o
