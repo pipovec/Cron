@@ -39,9 +39,15 @@ string SendCurl::SendRequest(string url, string postdata)
 
     /* Check for errors */
     if (res != CURLE_OK)
+    {
         fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
 
+
+        long response_code;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        cout << "CURL response code: " << response_code << endl;
+    }
     /* always cleanup */
     curl_easy_cleanup(curl);
     url.clear();
@@ -125,7 +131,7 @@ string SendCurl::SendWOT(string method, string post)
         catch (json::parse_error &e)
         {
             cout << "Parser in SendCurl: " << e.what() << endl;
-            cout << js << endl;
+            cout << data << endl;
         }
 
         status = js["status"];
