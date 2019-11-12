@@ -13,7 +13,7 @@
 /**  Moje kniznice  */
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
-#include "./json/src/json.hpp"
+#include "./lib/json.hpp"
 
 using namespace std;
 

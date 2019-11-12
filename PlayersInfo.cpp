@@ -156,15 +156,10 @@ void SpracujHracov(int i, int *p_Array, string *json, string a_id100, int *upd, 
         
 
         if(insert.compare("null") == 0){DeletePlayers(conn, a_id); *ins = *ins + 1;continue;}
-        
-        /* client language */
-        unsigned zaciatok   = insert.find("client_language"); // 
-        unsigned koniec     = insert.find("\",", zaciatok);
-        cl                  = insert.substr(zaciatok+18, koniec - (zaciatok+18));
-        
+                
         /* global rating */ 
-        zaciatok            = insert.find("global_rating");
-        koniec              = insert.find(",", zaciatok);
+        unsigned zaciatok   = insert.find("global_rating");
+        unsigned koniec     = insert.find(",", zaciatok);
         gr                  = insert.substr(zaciatok+15, koniec - (zaciatok+15)); 
 
         /* logout_at */ 
@@ -193,22 +188,20 @@ void SpracujHracov(int i, int *p_Array, string *json, string a_id100, int *upd, 
 
         if(ntuples == 1)
         {
-            string client_language  = PQgetvalue(result,0,1);
-            string global_rating    = PQgetvalue(result,0,2);
-            string logout_at        = PQgetvalue(result,0,3);
-            string created_at       = PQgetvalue(result,0,4);
-            string last_battle_time = PQgetvalue(result,0,5);
+            string global_rating    = PQgetvalue(result,0,1);
+            string logout_at        = PQgetvalue(result,0,2);
+            string created_at       = PQgetvalue(result,0,3);
+            string last_battle_time = PQgetvalue(result,0,4);
 
-            if(client_language.compare(cl) !=0){   UpdatePlayersInfo(conn,a_id, cl, gr, la, ca, lbt); *upd = *upd + 1; continue;}
-            if(global_rating.compare(gr) !=0){    UpdatePlayersInfo(conn,a_id, cl, gr, la, ca, lbt); *upd = *upd + 1; continue;}
-            if(logout_at.compare(la) !=0){   UpdatePlayersInfo(conn,a_id, cl, gr, la, ca, lbt); *upd = *upd + 1;continue;}
-            if(last_battle_time.compare(lbt) !=0){ UpdatePlayersInfo(conn,a_id, cl, gr, la, ca, lbt);*upd = *upd + 1; continue;}
+            if(global_rating.compare(gr) !=0){    UpdatePlayersInfo(conn,a_id, gr, la, ca, lbt); *upd = *upd + 1; continue;}
+            if(logout_at.compare(la) !=0){   UpdatePlayersInfo(conn,a_id, gr, la, ca, lbt); *upd = *upd + 1;continue;}
+            if(last_battle_time.compare(lbt) !=0){ UpdatePlayersInfo(conn,a_id, gr, la, ca, lbt);*upd = *upd + 1; continue;}
 
             
         }
         else
         {
-            InsertPlayersInfo(conn,a_id,cl,gr,la,ca,lbt);
+            InsertPlayersInfo(conn,a_id,gr,la,ca,lbt);
         }
         a_id.clear();client_language.clear();global_rating.clear();logout_at.clear();created_at.clear();last_battle_time.clear();
         cl.clear();gr.clear();la.clear();ca.clear();lbt.clear();
@@ -219,9 +212,9 @@ void SpracujHracov(int i, int *p_Array, string *json, string a_id100, int *upd, 
     
 }
 
-void UpdatePlayersInfo(PGconn *conn, string account_id, string client_language, string global_rating, string logout_at, string created_at, string last_battle_time)
+void UpdatePlayersInfo(PGconn *conn, string account_id, string global_rating, string logout_at, string created_at, string last_battle_time)
 {
-    string sql = "UPDATE players_info SET client_language = '" + client_language + "', global_rating = " + global_rating + ", logout_at = to_timestamp(" + logout_at + "), created_at = to_timestamp("+created_at+"),";
+    string sql = "UPDATE players_info SET  global_rating = " + global_rating + ", logout_at = to_timestamp(" + logout_at + "), created_at = to_timestamp("+created_at+"),";
     sql += " last_battle_time = to_timestamp("+last_battle_time+") WHERE account_id  = " + account_id;
 
     PGresult *result;
@@ -260,11 +253,11 @@ void DeletePlayers(PGconn *conn, string a_id)
     /*sql2.clear();*/
 }
 
-void InsertPlayersInfo(PGconn *conn,string account_id, string client_language, string global_rating, string logout_at, string created_at, string last_battle_time )
+void InsertPlayersInfo(PGconn *conn,string account_id, string global_rating, string logout_at, string created_at, string last_battle_time )
 {
     PGresult *result;
 
-    string insert = "INSERT INTO players_info VALUES ("+account_id+","+global_rating+",'"+client_language+"',to_timestamp("+logout_at+"),to_timestamp("+last_battle_time+"),to_timestamp("+created_at+"))";
+    string insert = "INSERT INTO players_info (account_id, logout_at, last_battle_time,created_at) VALUES ("+account_id+","+global_rating+", to_timestamp("+logout_at+"),to_timestamp("+last_battle_time+"),to_timestamp("+created_at+"))";
 
     result = PQexec(conn, insert.c_str());
         if (PQresultStatus(result) != PGRES_COMMAND_OK)
