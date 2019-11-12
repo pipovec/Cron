@@ -182,7 +182,7 @@ void CheckData () {
                 
                 
                 if(it->second.global_rating != stoi(PQgetvalue(prepared,0,1))) {
-                    cout << "Global rating: "<< it->second.global_rating << " vs " << PQgetvalue(prepared,0,1) << endl;
+                    //cout << "Global rating: "<< it->second.global_rating << " vs " << PQgetvalue(prepared,0,1) << endl;
                     up = 1;
                 }                
 
