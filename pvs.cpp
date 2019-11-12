@@ -20,7 +20,7 @@
 /**  Moje kniznice  */
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
-#include "./json/src/json.hpp"
+#include "./lib/json.hpp"
 
 
 
@@ -120,9 +120,11 @@ void GetAccountId()
 {
         
     PGresult *result;
-    const char *query = "SELECT account_id FROM players_stat_all_history WHERE date = current_date - interval '1 days ' AND battles > 0";
+    //const char *query = "; AND battles > 0";
     //const char *query  = "SELECT account_id FROM players_all";
-    result          = PQexec(conn, query);
+    string query = "SELECT account_id FROM players_stat_all_history WHERE date = current_date - interval '1 days ' AND account_id IN (SELECT DISTINCT(account_id) FROM members_role WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs))";
+
+    result          = PQexec(conn, query.c_str());
          if (PQresultStatus(result) != PGRES_TUPLES_OK)
                 {cout << "GetPlayers: " <<  PQresultErrorMessage(result) << endl;}
 
