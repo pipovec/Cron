@@ -122,8 +122,8 @@ void SpracujHracov(int i, int *p_Array, string *json, string a_id100, int *upd, 
     PGresult *result;
     string dataHraca(string account_id, string *json);  // funkcia na parsovanie JSON
     void DeletePlayers(PGconn *conn, string a_id); // Vymazanie hraca z databazy
-    void UpdatePlayersInfo(PGconn *conn, string account_id, string client_language, string global_rating, string logout_at, string created_at, string last_battle_time); // Update players_info
-    void InsertPlayersInfo(PGconn *conn,string account_id, string client_language, string global_rating, string logout_at, string created_at, string last_battle_time );
+    void UpdatePlayersInfo(PGconn *conn, string account_id, string global_rating, string logout_at, string created_at, string last_battle_time); // Update players_info
+    void InsertPlayersInfo(PGconn *conn,string account_id,  string global_rating, string logout_at, string created_at, string last_battle_time );
 
     //Otvorim si spojenie do databazy 
     PGconn  *conn;
