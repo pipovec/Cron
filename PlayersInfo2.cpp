@@ -18,7 +18,7 @@
 using namespace std;
 
 // Co budem pozadovat od serveru
-const string field = "&fields=account_id,client_language,global_rating";
+const string field = "&fields=account_id,global_rating";
 const string method   = "/account/info/";
 string post;
 string json_data;
@@ -46,7 +46,7 @@ void PripojDatabase() {
 
     /////////// Priprav dotaz
     PGresult *result;    
-    const char* query  = "SELECT account_id,global_rating,client_language FROM players_info WHERE account_id = $1";
+    const char* query  = "SELECT account_id,global_rating FROM players_info WHERE account_id = $1";
 
     result = PQprepare(conn,"players_info",query,1,NULL);
     if (PQresultStatus(result) != PGRES_COMMAND_OK)
@@ -139,8 +139,7 @@ void ParseJson() {
                 if(!j.is_null())
                 {
                     player_data.account_id = j["account_id"].get<int>();
-                    player_data.global_rating = j["global_rating"].get<int>();
-                    player_data.client_language = j["client_language"].get<string>();                    
+                    player_data.global_rating = j["global_rating"].get<int>();                    
 
                     maps_data[j["account_id"].get<int>()] = player_data;
                 }                
@@ -181,12 +180,9 @@ void CheckData () {
             if(riadkov == 1) {
                 int up = 0;
                 
-                if(it->second.client_language.compare( PQgetvalue(prepared,0,2)) != 0) {
-                    //cout << "Language: " << it->second.client_language << " vs " << PQgetvalue(prepared,0,2) << endl;
-                    up = 1;
-                }
+                
                 if(it->second.global_rating != stoi(PQgetvalue(prepared,0,1))) {
-                    //cout << "Global rating: "<< it->second.global_rating << " vs " << PQgetvalue(prepared,0,1) << endl;
+                    cout << "Global rating: "<< it->second.global_rating << " vs " << PQgetvalue(prepared,0,1) << endl;
                     up = 1;
                 }                
 
@@ -202,7 +198,7 @@ void CheckData () {
 
             if(riadkov == 0 ) {
         
-                insert_values += "("+to_string(it->first)+","+to_string(it->second.global_rating)+",'"+it->second.client_language+"'),";
+                insert_values += "("+to_string(it->first)+","+to_string(it->second.global_rating)+"'),";
         
                 insert_counter ++;
                 ins ++;        
@@ -213,7 +209,7 @@ void CheckData () {
     
     if(ins > 0) {
         insert_values.pop_back();
-        string query = "INSERT INTO players_info (account_id,global_rating,client_language) VALUES " + insert_values ;         
+        string query = "INSERT INTO players_info (account_id,global_rating) VALUES " + insert_values ;         
         insert_q = PQexec(conn, query.c_str());        
         if (PQresultStatus(insert_q) != PGRES_COMMAND_OK)
                             {cout << "Chyba insert players_info "  <<  PQresultErrorMessage(insert_q) << endl;}
@@ -225,7 +221,7 @@ void CheckData () {
     
     if(upd > 0) {
         update_values.pop_back();
-        string query = "UPDATE players_info as p SET global_rating = u.global_rating, client_language = u.client_language FROM (VALUES " + update_values + ") as u (account_id,global_rating,client_language) WHERE p.account_id = u.account_id";        
+        string query = "UPDATE players_info as p SET global_rating = u.global_rating FROM (VALUES " + update_values + ") as u (account_id,global_rating) WHERE p.account_id = u.account_id";        
         update_q = PQexec(conn, query.c_str());
         
         if (PQresultStatus(update_q) != PGRES_COMMAND_OK)
