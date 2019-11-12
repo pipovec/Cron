@@ -294,7 +294,7 @@ int main()
 
        
     // Co budem pozadovat od serveru
-    const string field = "&fields=client_language,global_rating,created_at,logout_at,last_battle_time";
+    const string field = "&fields=global_rating,created_at,logout_at,last_battle_time";
     const string method   = "/account/info/";
 
     string a_id;
