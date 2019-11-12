@@ -198,7 +198,7 @@ void CheckData () {
 
             if(riadkov == 0 ) {
         
-                insert_values += "("+to_string(it->first)+","+to_string(it->second.global_rating)+"'),";
+                insert_values += "("+to_string(it->first)+","+to_string(it->second.global_rating)+"),";
         
                 insert_counter ++;
                 ins ++;        
