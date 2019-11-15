@@ -42,12 +42,13 @@ void GetPlayers(mymap *a_ids, int *ntuples)
 {
     PGconn *conn;
     PGresult *result;
-    const char query[] = "SELECT account_id FROM players_all";
+    //string query = "SELECT account_id FROM players_all";
+    string query = "SELECT account_id FROM players_stat_all_history WHERE date = current_date - interval '1 days'";
 
     Pgsql *pgsql = new Pgsql;
     conn = pgsql->Get();
 
-    result = PQexec(conn, query);
+    result = PQexec(conn, query.c_str());
 
     if (PQresultStatus(result) != PGRES_TUPLES_OK)
     {
