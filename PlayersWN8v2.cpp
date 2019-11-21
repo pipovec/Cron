@@ -8,8 +8,9 @@
 #include <unordered_map>
 #include <algorithm>
 #include <queue>
-#include <math.h>  
+#include <math.h>
 #include <thread>
+#include <mutex>
 
 using namespace std;
 
@@ -30,6 +31,9 @@ typedef queue<int> Account_ids;
 
 // Cointainer pre wn8 hodnoty
 typedef unordered_map<int, float> wn8value;
+
+// Zamok pre kriticku oblast
+mutex id_lock;
 
 // Vcerajsin datum ako string
 string Datum()
@@ -89,16 +93,18 @@ void GetPlayers(Account_ids *a_ids)
 string GetPlayersIds(Account_ids *p_aids)
 {
     string id;
-
+    id_lock.lock();
     for (int i = 0; i < 100; i++)
     {
         if (!p_aids->empty())
         {
             id += to_string(p_aids->front());
-            id += ',';
             p_aids->pop();
+
+            id += ',';
         }
     }
+    id_lock.unlock();
 
     // Vymaze poslednu ciarku
     id.erase(id.end() - 1);
@@ -243,13 +249,14 @@ void SpocitajWN8(PlayersStats *p_pstats, Data_vehicle *p_vehicles, wn8value *p_w
 
         wn_value = wn8->GetWN8(players, tanks);
 
-        if ( isinf(wn_value) ){
-            cout << "account_id "<< id << " nema spravne hodnoty" << endl;
+        if (isinf(wn_value))
+        {
+            cout << "account_id " << id << " nema spravne hodnoty" << endl;
         }
-        else{
+        else
+        {
             (*p_wn8)[id] = wn_value;
         }
-        
 
         //cout << "account_id: " << id << " : "  << wn_value << endl;
     }
@@ -293,14 +300,18 @@ void UlozHraca(wn8value *p_wn8)
     q_insert += ins;
     //cout << q_delete << endl;
     result = PQexec(conn, q_delete.c_str());
-     if (PQresultStatus(result) != PGRES_COMMAND_OK)
-            {cout << "DELETE error: " <<  PQresultErrorMessage(result) << endl;}
+    if (PQresultStatus(result) != PGRES_COMMAND_OK)
+    {
+        cout << "DELETE error: " << PQresultErrorMessage(result) << endl;
+    }
     PQclear(result);
 
     //cout << q_insert << endl;
     result = PQexec(conn, q_insert.c_str());
     if (PQresultStatus(result) != PGRES_COMMAND_OK)
-            {cout << "INSERT error: " <<  PQresultErrorMessage(result) << endl;}
+    {
+        cout << "INSERT error: " << PQresultErrorMessage(result) << endl;
+    }
     PQclear(result);
 
     p_wn8->clear();
@@ -334,6 +345,7 @@ int main()
 
     // String s id
     string account_ids_string;
+    string account_ids_string2;
 
     // undordered map pre account_id, wn8
     wn8value wn8;
@@ -354,15 +366,19 @@ int main()
     {
         // Ziska 100 id ako string
         account_ids_string = GetPlayersIds(p_aids);
+        account_ids_string2 = GetPlayersIds(p_aids);
 
-        // Nahram 100 statistik hracov
-        //PlayerS->Gets(account_ids_string, p_pstats);        
-        std::thread th1(&GetPlayersStats::Gets, PlayerS, account_ids_string, p_pstats);
-
-        //Vehicles->Gets(account_ids_string, p_vehicles);
+        // Nahram 100 statistik hracov        
+        std::thread th1(&GetPlayersStats::Gets, PlayerS, account_ids_string, p_pstats);        
         std::thread th2(&GetPlayersVehicles::Gets, Vehicles, account_ids_string, p_vehicles);
 
-        th1.join(); th2.join();
+        std::thread th3(&GetPlayersStats::Gets, PlayerS, account_ids_string2, p_pstats);        
+        std::thread th4(&GetPlayersVehicles::Gets, Vehicles, account_ids_string2, p_vehicles);
+
+        th1.join();
+        th2.join();
+        th3.join();
+        th4.join();
 
         // Ziskanie WN8 hodnot
         if (pstats.size() > pamataj)
