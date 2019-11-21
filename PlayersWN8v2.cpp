@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <algorithm>
 #include <queue>
+#include <math.h>  
+
 
 using namespace std;
 
@@ -240,7 +242,14 @@ void SpocitajWN8(PlayersStats *p_pstats, Data_vehicle *p_vehicles, wn8value *p_w
         auto tanks = p_vehicles->at(id);
 
         wn_value = wn8->GetWN8(players, tanks);
-        (*p_wn8)[id] = wn_value;
+
+        if ( isinf(wn_value) ){
+            cout << "account_id "<< id << " nema spravne hodnoty" << endl;
+        }
+        else{
+            (*p_wn8)[id] = wn_value;
+        }
+        
 
         //cout << "account_id: " << id << " : "  << wn_value << endl;
     }
