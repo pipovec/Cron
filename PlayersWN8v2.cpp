@@ -396,7 +396,7 @@ int main()
             UlozHraca(p_wn8);
         }
 
-        account_ids_string.clear();
+        account_ids_string.clear();account_ids_string2.clear();
     }
 
     // Ak nieco zostalo, tak to doukladaj
