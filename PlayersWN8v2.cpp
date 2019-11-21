@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <queue>
 #include <math.h>  
-
+#include <thread>
 
 using namespace std;
 
@@ -356,8 +356,13 @@ int main()
         account_ids_string = GetPlayersIds(p_aids);
 
         // Nahram 100 statistik hracov
-        PlayerS->Gets(account_ids_string, p_pstats);
-        Vehicles->Gets(account_ids_string, p_vehicles);
+        //PlayerS->Gets(account_ids_string, p_pstats);        
+        std::thread th1(&GetPlayersStats::Gets, PlayerS, account_ids_string, p_pstats);
+
+        //Vehicles->Gets(account_ids_string, p_vehicles);
+        std::thread th2(&GetPlayersVehicles::Gets, Vehicles, account_ids_string, p_vehicles);
+
+        th1.join(); th2.join();
 
         // Ziskanie WN8 hodnot
         if (pstats.size() > pamataj)
