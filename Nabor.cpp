@@ -127,7 +127,7 @@ void Update1()
         account_id  = PQgetvalue(data1,i,0);
         battles_all = PQgetvalue(data1,i,1);
         wins        = PQgetvalue(data1,i,2);
-        battles_sk  = PQgetvalue(data1,i,2);
+        battles_sk  = PQgetvalue(data1,i,3);
         
         wins        = Winrate(battles_all, wins);
 
