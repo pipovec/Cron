@@ -109,13 +109,15 @@ void Update1()
     PGconn *conn;
     conn = pg->Get();
 
-    string query1 = "select account_id, battles, wins FROM players_stat_all where account_id IN (select account_id from nabor_new)";
-    string account_id,battles_all,wins,update;
+    //string query1 = "select account_id, battles, wins FROM players_stat_all where account_id IN (select account_id from nabor_new)";
+    string query = "select psa.account_id, psa.battles as battles_all, psa. wins, pss.battles as batles_sh FROM players_stat_all psa left join players_stat_skirmish pss ON psa.account_id = pss.account_id where psa.account_id IN (select account_id from nabor_new)";
+
+    string account_id,battles_all,battles_sk,wins,update;
     int riadkov, i;
 
     string Winrate(string battles_all, string wins);
 
-    data1 = pg->Query(query1.c_str());
+    data1 = pg->Query(query.c_str());
     riadkov = PQntuples(data1);
     
 
@@ -125,12 +127,13 @@ void Update1()
         account_id  = PQgetvalue(data1,i,0);
         battles_all = PQgetvalue(data1,i,1);
         wins        = PQgetvalue(data1,i,2);
+        battles_sk  = PQgetvalue(data1,i,2);
         
         wins        = Winrate(battles_all, wins);
 
-        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  " WHERE account_id =" + account_id;
+        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  ", battles_sk = "+battles_sk+" WHERE account_id =" + account_id;
         PQexec(conn,update.c_str());
-        update.clear();battles_all.clear();wins.clear();account_id.clear();
+        update.clear();battles_all.clear();wins.clear();account_id.clear();battles_sk.clear();
     }
     PQclear(data1);PQfinish(conn);
 }
@@ -239,6 +242,18 @@ string BattlesAll(PGconn *conn, string account_id)
     PGresult *res;
     string result;
     string sql = "select battles from players_stat_all where account_id = " + account_id;
+    
+    res = PQexec(conn, sql.c_str());
+    result = PQgetvalue(res,0,0); 
+    PQclear(res);
+    return result;
+}
+
+string BattlesSh(PGconn *conn, string account_id)
+{
+    PGresult *res;
+    string result;
+    string sql = "select battles from players_stat_skirmish where account_id = " + account_id;
     
     res = PQexec(conn, sql.c_str());
     result = PQgetvalue(res,0,0); 
