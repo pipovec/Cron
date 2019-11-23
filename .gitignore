@@ -1,0 +1,6 @@
+
+*.o
+
+bin/
+
+lib/Pgsql.h

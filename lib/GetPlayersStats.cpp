@@ -1,8 +1,7 @@
 
 #include "./GetPlayersStats.h"
 #include "./SendCurl.h"
-#include "../json/src/json.hpp"
-
+#include "./json.hpp"
 #include <iostream>
 #include <unordered_map>
 
