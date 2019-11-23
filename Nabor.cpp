@@ -132,6 +132,7 @@ void Update1()
         wins        = Winrate(battles_all, wins);
 
         update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  ", battles_sk = "+battles_sk+" WHERE account_id =" + account_id;
+        
         PQexec(conn,update.c_str());
         update.clear();battles_all.clear();wins.clear();account_id.clear();battles_sk.clear();
     }
@@ -376,6 +377,7 @@ int main()
     void UlozZakladHracov();
     UlozZakladHracov();
 
+    
     void Update3();
     Update3();
 
