@@ -1,4 +1,4 @@
-/*
+/**
 *   Program na kontrolu volnych Cz/Sk hracov 
 *
 *   author: Boris Fekar
@@ -238,29 +238,6 @@ void Level6(PGconn *conn, string *account_id, string *result6)
   
 }
 
-string BattlesAll(PGconn *conn, string account_id)
-{
-    PGresult *res;
-    string result;
-    string sql = "select battles from players_stat_all where account_id = " + account_id;
-    
-    res = PQexec(conn, sql.c_str());
-    result = PQgetvalue(res,0,0); 
-    PQclear(res);
-    return result;
-}
-
-string BattlesSh(PGconn *conn, string account_id)
-{
-    PGresult *res;
-    string result;
-    string sql = "select battles from players_stat_skirmish where account_id = " + account_id;
-    
-    res = PQexec(conn, sql.c_str());
-    result = PQgetvalue(res,0,0); 
-    PQclear(res);
-    return result;
-}
 
 /* Kontrola kolko hrac odohral bitiek za 7,14,30 dni */
 void Update3()
@@ -377,6 +354,8 @@ int main()
     void UlozZakladHracov();
     UlozZakladHracov();
 
+    void Update1();
+    Update1(); 
     
     void Update3();
     Update3();
@@ -384,10 +363,6 @@ int main()
     void Role();
     Role();
     
-
-    void Update1();
-    Update1();
-
     void Update2();
     Update2();
     
