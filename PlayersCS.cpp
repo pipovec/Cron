@@ -33,7 +33,7 @@ void GetClanId(fronta *p_aids, PGconn *permanent_connection)
 
     //SELECT clan_id FROM clan_all  WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC;
     //string query = "SELECT clan_id FROM " + table + " WHERE language != 'cs' AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
-    string query = "SELECT clan_id FROM clan_all  WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
+    string query = "SELECT clan_id FROM clan_all WHERE language = 'pl' OR clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
 
     PGresult *result;
 
