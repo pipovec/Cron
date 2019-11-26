@@ -1,15 +1,15 @@
-#include "QUEUE.h"
+#include "./Queue.h"
 
-Queue::push(string json)
+void Queue::push(string json)
 {
     mutex_lock.lock();
     json_queue.push(json);
     mutex_lock.unlock();
 }
 
-Queue::front()
+string Queue::front()
 {    
-    if (json_queue.empty() !== true)
+    if (json_queue.empty() != true)
     {
         mutex_lock.lock();
             string data = json_queue.front();
@@ -20,16 +20,16 @@ Queue::front()
     }
     else
     {
-        return null;
+        return NULL;
     }
 }
 
-Queue::size()
+int Queue::size()
 {
     return json_queue.size();
 }
 
-Queue::empty()
+bool Queue::empty()
 {
     return json_queue.empty();
 }

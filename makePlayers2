@@ -2,7 +2,7 @@ LIBFLAGS:= -L/usr/lib/x86_64-linux-gnu -lpq -lcurl -lpthread
 CPPFLAGS:= --std=c++11 -Wall -O2 -I/usr/include/postgresql
 
 
-Players2: SendCurl.o Pgsql.o Players2.o  ./lib/SendCurl.h  ./lib/Pgsql.h ./lib/Queue
+Players2: SendCurl.o Pgsql.o Players2.o Queue.o ./lib/SendCurl.h  ./lib/Pgsql.h ./lib/Queue.h
 	$(CXX)  -o  ./bin/Players2 Players2.o ./lib/SendCurl.o  ./lib/Pgsql.o ./lib/Queue.o $(LIBFLAGS)
 
 Players2.o:	Players2.cpp 

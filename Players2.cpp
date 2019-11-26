@@ -5,6 +5,7 @@
 #include <thread>
 #include <sstream>
 #include <chrono>
+#include <mutex>
 
 /** Kontainer **/
 #include <queue>
@@ -29,7 +30,12 @@ typedef queue<int> fronta;
 
 string table = "clan_all";
 
-void GetClanId(queue *p_aids)
+mutex mutex_lock;
+
+const char text[] = "&fields=clan_id,members_count,members.account_id,members.account_name,members.joined_at,members.role_i18n&language=cs";
+const string method = "/clans/info/";
+
+void GetClanId(fronta *p_aids)
 {
     string query = "SELECT clan_id FROM clan_all WHERE language = 'cs' or language = 'sk' or language = 'pl'";
 
@@ -38,16 +44,18 @@ void GetClanId(queue *p_aids)
 
     Pgsql *pg = new Pgsql;
     conn = pg->Get();
-     
+
     result = PQexec(conn, query.c_str());
-     if (PQresultStatus(result) != PGRES_COMMAND_OK)
-    {cout << "Chyba ziskania clan_id." << endl;} 
-    int riadkov = PQntuples(result);
-    cout << "Pocet klanov na spracovanie: " << riadkov << endl;
+    if (PQresultStatus(result) != PGRES_TUPLES_OK)
+    {
+        cout << "Chyba ziskania clan_id." << endl;
+    }
+
+    cout << "Pocet klanov na spracovanie: " << PQntuples(result) << endl;
 
     int i;
 
-    for (i = 0; i < riadkov; i++)
+    for (i = 0; i < PQntuples(result); i++)
     {
         (*p_aids).push(stoi(PQgetvalue(result, i, 0)));
     }
@@ -55,65 +63,36 @@ void GetClanId(queue *p_aids)
     PQfinish(conn);
 }
 
-void Get100Id(string *p_clan_id, fronta *p_aids, int a_clan_id[100])
+void SendPost(fronta *p_aids, Queue *queue_for_json)
 {
-
+    string clan_ids_string;
     int i = 0;
+
+    mutex_lock.lock();
     while (!(*p_aids).empty())
     {
-
-        int c = (*p_aids).front();
-
-        *p_clan_id += to_string(c) + ","; // dam si ID do stringu
-        a_clan_id[i] = (*p_aids).front(); // a dam si ho aj do pola int aby som s nim lahsie pracoval
+        int clan_id = (*p_aids).front();
+        clan_ids_string += to_string(clan_id) + ",";
         (*p_aids).pop();
+
         i++;
         if (i == 100)
-        {
             break;
-        }
     }
-}
 
-void SendPost(string clan_id, string *json)
-{
-    const char text[] = "&fields=clan_id,members_count,members.account_id,members.account_name,members.joined_at,members.role_i18n&language=cs";
+    cout << "Velkost fronty: " << queue_for_json->size() << " velkost clan_ids: " << (*p_aids).size() << endl;
+    mutex_lock.unlock();
 
     string field(text);
-    int x = 1;
-
-    const string method = "/clans/info/";
-
-    string post_data = field + "&clan_id=" + clan_id;
+    string post_data = field + "&clan_id=" + clan_ids_string;
 
     SendCurl send;
-
-    do
-    {
-        try
-        {
-            *json = send.SendWOT(method, post_data);
-            x = 0;
-        }
-        catch (exception &e)
-        {
-            cout << e.what() << endl;
-            x = 1;
-        }
-    } while (x != 0);
+    string json_string = send.SendWOT(method, post_data);
+    queue_for_json->push(json_string);
 
     post_data.clear();
     field.clear();
-}
-
-void CleaArray(int a_clan_id[100])
-{
-    int i = 0;
-    while (i < 100)
-    {
-        a_clan_id[i] = 0;
-        i++;
-    }
+    clan_ids_string.clear();
 }
 
 class Spracuj
@@ -628,7 +607,7 @@ void prepared_select_members_role(PGconn *conn)
 
 int main()
 {
-    time_t startprog, stopprog;
+    time_t startprog; //stopprog;
     time(&startprog);
 
     cout << "*********************************" << endl;
@@ -641,11 +620,27 @@ int main()
     start = chrono::high_resolution_clock::now();
 
     // Sem si ulozim vsetky clan_id
-    fronta clan_ids, fronta *p_clan_ids; p_clan_ids = &clan_ids;
+    fronta clan_ids;
+    fronta *p_clan_ids;
+    p_clan_ids = &clan_ids;    
     GetClanId(p_clan_ids);
+
+    // Fronta pre jsons
+    Queue *queue_for_json = new Queue;
+
+    while (!clan_ids.empty())
+    {
+
+        thread th1(SendPost, p_clan_ids, queue_for_json);
+        thread th2(SendPost, p_clan_ids, queue_for_json);
+
+        th1.join();
+        th2.join();
+    }
 
     return 0;
 
+    /**
     string json;
     string *p_json;
     p_json = &json;
@@ -672,15 +667,15 @@ int main()
         delete doit;
 
         /** Pausa pred dalsim kolom na ulozenie databazy */
-        //chrono::seconds dura(1); // pausa 3 sec
-        //this_thread::sleep_for( dura );
-
+    //chrono::seconds dura(1); // pausa 3 sec
+    //this_thread::sleep_for( dura );
+    /*
         main2 = chrono::high_resolution_clock::now();
         chrono::duration<double> elapsed_main = main2 - main1;
 
         cout << elapsed_main.count() << " Sucasne kolo: " << i << " Zostava cids: " << cids.size() << endl;
     }
-
+    
     t1 = chrono::high_resolution_clock::now();
     chrono::duration<double> elapsed_seconds = t1 - start;
     cout << "Pocet kol \t\t" << i << endl;
@@ -695,5 +690,6 @@ int main()
     cout << "Program skoncil pracovat: " << ctime(&stopprog) << endl;
 
     PQfinish(permanent_connection);
+    */
     return 0;
 }

@@ -19,10 +19,10 @@ public:
     int size();
     string front();
     bool empty();
-    bool push(string json);
+    void push(string json);
 
 private:
     queue<string> json_queue;
     mutex mutex_lock;    
-}
+};
 #endif // QUEUE_H
