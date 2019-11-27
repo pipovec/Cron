@@ -257,7 +257,7 @@ void SpocitajWN8(PlayersStats *p_pstats, Data_vehicle *p_vehicles, wn8value *p_w
         {
             (*p_wn8)[id] = wn_value;
         }
-        p_stats->erase(id);
+        p_pstats->erase(id);
         p_vehicles->erase(id);
         //cout << "account_id: " << id << " : "  << wn_value << endl;
     }
