@@ -257,7 +257,8 @@ void SpocitajWN8(PlayersStats *p_pstats, Data_vehicle *p_vehicles, wn8value *p_w
         {
             (*p_wn8)[id] = wn_value;
         }
-
+        p_stats->erase(id);
+        p_vehicles->erase(id);
         //cout << "account_id: " << id << " : "  << wn_value << endl;
     }
 
@@ -391,7 +392,7 @@ int main()
         {
 
             time(&aktualny_cas);
-            cout << ctime(&aktualny_cas) << " - Ukladanie hracov, velkost stacku: " << wn8.size() << endl;
+            cout << ctime(&aktualny_cas) << " Na spracovanie zostava hracov: " << aids.size() << " - Ukladanie hracov, velkost stacku: " << wn8.size() << endl;
 
             UlozHraca(p_wn8);
         }
