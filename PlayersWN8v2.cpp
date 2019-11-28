@@ -18,7 +18,7 @@ using namespace std;
 const char *master_query = "SELECT account_id FROM players_all";
 
 // Kedy sa maju pocitat WN8
-const int pamataj = 4500;
+const int pamataj = 1200;
 
 /* Meranie casu */
 typedef unsigned long long timestamp_t;
