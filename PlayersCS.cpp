@@ -1,6 +1,7 @@
 #include <iostream>
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
+#include "./lib/json.hpp"
 #include <thread>
 #include <sstream>
 #include <chrono>
@@ -34,7 +35,7 @@ void GetClanId(fronta *p_aids, PGconn *permanent_connection)
     //SELECT clan_id FROM clan_all  WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC;
     //string query = "SELECT clan_id FROM " + table + " WHERE language != 'cs' AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
    //SELECT clan_id FROM clan_all WHERE (language IN ('pl','cz','sk') OR clan_id IN (select clan_id from tmp_clans_cs)) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty)
-     string query = "SELECT clan_id FROM clan_all WHERE (language IN ('pl','cz','sk') OR clan_id IN (select clan_id from tmp_clans_cs)) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) LIMIT 150";
+     string query = "SELECT clan_id FROM intresting_clans";
 
     PGresult *result;
 
@@ -176,15 +177,15 @@ public:
                 continue;
             }
 
-            // Ak je iny pocet clenov v tabulke clan_all oprav top
-            cout << "members count: "<< members_count << " players all size: "<< (int)players_all.size() << endl;
+            // Ak je iny pocet clenov v tabulke clan_all oprav top            
             if (members_count != (int)players_all.size())
             {
+                cout << "members count: "<< members_count << " players all in database size: "<< (int)players_all.size() << endl;
                 this->update_clan_all_members_count(cid, members_count);
             }
 
             // Naplni container fresh udajmi z wargamingu
-            this->spracuj_json_map(clan_data, p_members_count);
+            this->spracuj_json_map(clan_data);
 
             this->spracuj_players_all(cid, players_all, fresh);
             this->spracuj_members_role(cid, members_role, fresh);
@@ -299,95 +300,76 @@ private:
         }
     }
 
-    string spracuj_json_vyber_clan_id(string json, int clan_id, int *members_count)
+    string spracuj_json_vyber_clan_id(string json_data, int clan_id, int *members_count)
     {
         string clan_data;
 
-        int begin, end;
-        begin = json.find(to_string(clan_id));
-        end = json.find("]},", begin);
+        *members_count = 0;
 
-        clan_data = json.substr(begin - 1, (end + 3) - begin);
+        using json = nlohmann::json;
+        json js;
 
-        // Zistim kolko zaznamov ma klan
-        begin = clan_data.find("members_count");
-        end = clan_data.find(",", begin);
-        try
-        {
-            *members_count = stoi(clan_data.substr(begin + 15, (end - begin + 15)));
+        try {
+        js = json::parse(json_data);
         }
-        catch (int e)
+        catch(json::parse_error& e)
         {
-            cout << "Chyba json vyber klan id" << endl;
-            cout << clan_data << endl;
-        }
+            cout << "Parser 0: " << e.what() << endl;            
+        }        
+        
+        js = js["data"];
 
-        if (*members_count == 0)
-        {
-            clan_data.clear();
-        }
+        for (json::iterator it = js.begin(); it != js.end(); ++it) {
+        
+            if(clan_id == stoi(it.key()))
+            {
+                json temp;
+
+                temp = it.value();
+
+                *members_count = temp["members_count"].get<int>();
+                clan_data = temp["members"].dump();
+                //cout << *members_count << " : " << clan_data << "\n";        
+                temp = NULL;
+            }
+            
+        } 
+        js = NULL;
 
         return clan_data;
     }
 
-    void spracuj_json_map(string clan_data, int *members_count)
+    void spracuj_json_map(string clan_data)
     {
-        int begin, end, posled;
+        using json = nlohmann::json;
+        json js;
+
+        try {
+        js = json::parse(clan_data);
+        }
+        catch(json::parse_error& e)
+        {
+            cout << "Parser spracuj_json_map: " << e.what() << endl;            
+        }      
+
         player data;
 
-        posled = 0;
+        for (json::iterator it = js.begin(); it != js.end(); ++it) {
 
-        int id, join;
-        id = join = 0;
-        string role, nick;
+            json temp;
+            temp = it.value();
 
-        begin = clan_data.find("[");
-        end = clan_data.find("]", begin);
-        clan_data = clan_data.substr(begin, end - begin);
+            data.account_id = temp["account_id"].get<int>();
+            data.account_name = temp["account_name"];
+            data.joined_at = temp["joined_at"].get<int>();
+            data.role_i18n = temp["role_i18n"];
 
-        while (begin > 0)
-        {
-            begin = clan_data.find("role_i18n", posled);
-            if (begin == -1)
-                break;
-            end = clan_data.find(",", begin);
-            role = clan_data.substr(begin + 12, (end - 1) - (begin + 12));
+            fresh[data.account_id] = data;
 
-            begin = clan_data.find("joined_at", end);
-            end = clan_data.find(",", begin);
-            try
-            {
-                join = stoi(clan_data.substr(begin + 11, (end - 1) - (begin + 11)));
-            }
-            catch (int e)
-            {
-                cout << "JSON MAP " << endl;
-            }
-
-            begin = clan_data.find("account_name", end);
-            end = clan_data.find(",", begin);
-            nick = clan_data.substr(begin + 15, (end - 1) - (begin + 15));
-
-            begin = clan_data.find("account_id", end);
-            end = clan_data.find(",", begin);
-            try
-            {
-                id = stoi(clan_data.substr(begin + 12, (end - 1) - (begin + 12)));
-            }
-            catch (int e)
-            {
-                cout << "JSON MAP 2" << endl;
-            }
-
-            posled = end;
-
-            data.account_id = id;
-            data.account_name = nick;
-            data.joined_at = join;
-            data.role_i18n = role;
-
-            fresh[id] = data;
+            temp = NULL;
         }
+
+        js = NULL;       
     }
 
     /* ################## Praca s databazou ############################## */
@@ -536,7 +518,23 @@ private:
     void update_clan_all_members_count(int cid, int members_count)
     {
         string query = "UPDATE clan_all SET members_count = " + to_string(members_count) + " WHERE clan_id = " + to_string(cid);
-        PQexec(this->permanent_connection, query.c_str());
+        
+        PGresult   *res;
+
+        res = PQexec(this->permanent_connection, query.c_str());
+
+        if (PQresultStatus(res) != PGRES_COMMAND_OK)
+        {
+            cout << "Error update clan_all members_count " << PQresultErrorMessage(res) << endl;             
+            PQclear(res);    
+            query.clear();
+        }
+        else
+        {
+            PQclear(res);    
+            query.clear();
+        }
+        
     }
 
     void exec_select_players_all(int clan_id)

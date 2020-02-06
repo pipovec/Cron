@@ -33,8 +33,8 @@ class Players
         }
 
         // Pre Cz/Sk hracov
-        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs)";
-        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OFFSET ";
+        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (SELECT clan_id FROM intresting_clans)";
+        string basic_query = "select distinct(account_id) from members_role where clan_id IN (SELECT clan_id FROM intresting_clans) OFFSET ";
 
         // Pre vsetkch hracov v databaze
         //string basic_query_count = "select count(account_id) from players_all";
@@ -180,8 +180,8 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
 
         json j;
         
-        /** Ziskanie account_id a hodnot */
-        for (auto& x : json::iterator_wrapper(js))
+        /** Ziskanie account_id a hodnot */        
+        for (json::iterator x = js.begin(); x != js.end(); x++)        
         {
             
             account_id = x.key();            
