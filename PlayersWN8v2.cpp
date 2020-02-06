@@ -384,6 +384,7 @@ int main()
         if (pstats.size() > pamataj)
         {
             SpocitajWN8(p_pstats, p_vehicles, p_wn8);
+            pstats.clear(); vehicles.clear();
         }
 
         // Ak je ziskany WN8 hracov viac ako pamataj uloz ich
