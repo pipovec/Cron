@@ -34,7 +34,7 @@ void GetClanId(fronta *p_aids, PGconn *permanent_connection)
     //SELECT clan_id FROM clan_all  WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC;
     //string query = "SELECT clan_id FROM " + table + " WHERE language != 'cs' AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
    //SELECT clan_id FROM clan_all WHERE (language IN ('pl','cz','sk') OR clan_id IN (select clan_id from tmp_clans_cs)) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty)
-     string query = "SELECT clan_id FROM clan_all WHERE (language IN ('pl','cz','sk') OR clan_id IN (select clan_id from tmp_clans_cs)) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty)";
+     string query = "SELECT clan_id FROM clan_all WHERE (language IN ('pl','cz','sk') OR clan_id IN (select clan_id from tmp_clans_cs)) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) LIMIT 150";
 
     PGresult *result;
 
@@ -146,7 +146,7 @@ public:
 
         string clan_data;
 
-        while (!clan_id[i] == 0)
+        while (clan_id[i] != 0)
         {
             cid = clan_id[i];
 
@@ -177,6 +177,7 @@ public:
             }
 
             // Ak je iny pocet clenov v tabulke clan_all oprav top
+            cout << "members count: "<< members_count << " players all size: "<< (int)players_all.size() << endl;
             if (members_count != (int)players_all.size())
             {
                 this->update_clan_all_members_count(cid, members_count);
