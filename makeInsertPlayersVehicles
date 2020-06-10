@@ -1,0 +1,17 @@
+LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lpq
+CPPFLAGS:=  --std=c++17 -Wall -g  -I/usr/include/postgresql
+
+InsertPlayersVehicles: InsertPlayersVehicles.o Pgsql.o GetAccountId.o
+	$(CXX) -o ./bin/InsertPlayersVehicles InsertPlayersVehicles.o ./lib/Pgsql.o ./lib/GetAccountId.o $(LIBFLAGS)
+
+InsertPlayersVehicles.o:	InsertPlayersVehicles.cpp
+	$(CXX) -c $(CPPFLAGS) InsertPlayersVehicles.cpp
+
+Pgsql.o: ./lib/Pgsql.cpp ./lib/Pgsql.h 
+	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp -o ./lib/Pgsql.o
+
+GetAccountId.o: ./lib/GetAccountId.cpp ./lib/GetAccountId.h
+	$(CXX) -c $(CPPFLAGS)  ./lib/GetAccountId.cpp -o ./lib/GetAccountId.o
+
+clean:
+	rm ./lib/*.o
