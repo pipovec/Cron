@@ -1,8 +1,8 @@
-LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lpq
-CPPFLAGS:=  --std=c++17 -Wall -g  -I/usr/include/postgresql
+LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lpq -lcurl -lpthread
+CPPFLAGS:=  --std=c++17 -O3 -Wall -g  -I/usr/include/postgresql
 
-InsertPlayersVehicles: InsertPlayersVehicles.o Pgsql.o GetAccountId.o
-	$(CXX) -o ./bin/InsertPlayersVehicles InsertPlayersVehicles.o ./lib/Pgsql.o ./lib/GetAccountId.o $(LIBFLAGS)
+InsertPlayersVehicles: InsertPlayersVehicles.o Pgsql.o GetAccountId.o SaveJsons.o Calculate.o SendCurl.o
+	$(CXX) -o ./bin/InsertPlayersVehicles InsertPlayersVehicles.o ./lib/Pgsql.o ./lib/PlayersVehiclesStat/GetAccountId.o ./lib/PlayersVehiclesStat/SaveJsons.o ./lib/PlayersVehiclesStat/Calculate.o ./lib/SendCurl.o $(LIBFLAGS)
 
 InsertPlayersVehicles.o:	InsertPlayersVehicles.cpp
 	$(CXX) -c $(CPPFLAGS) InsertPlayersVehicles.cpp
@@ -10,8 +10,17 @@ InsertPlayersVehicles.o:	InsertPlayersVehicles.cpp
 Pgsql.o: ./lib/Pgsql.cpp ./lib/Pgsql.h 
 	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp -o ./lib/Pgsql.o
 
-GetAccountId.o: ./lib/GetAccountId.cpp ./lib/GetAccountId.h
-	$(CXX) -c $(CPPFLAGS)  ./lib/GetAccountId.cpp -o ./lib/GetAccountId.o
+SendCurl.o: ./lib/SendCurl.cpp ./lib/SendCurl.h 
+	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp -o ./lib/SendCurl.o
+
+GetAccountId.o: ./lib/PlayersVehiclesStat/GetAccountId.cpp ./lib/PlayersVehiclesStat/GetAccountId.h
+	$(CXX) -c $(CPPFLAGS)  ./lib/PlayersVehiclesStat/GetAccountId.cpp -o ./lib/PlayersVehiclesStat/GetAccountId.o
+
+SaveJsons.o: ./lib/PlayersVehiclesStat/SaveJsons.cpp ./lib/PlayersVehiclesStat/SaveJsons.h
+	$(CXX) -c $(CPPFLAGS) ./lib/PlayersVehiclesStat/SaveJsons.cpp -o ./lib/PlayersVehiclesStat/SaveJsons.o
+
+Calculate.o : ./lib/PlayersVehiclesStat/Calculate.cpp ./lib/PlayersVehiclesStat/Calculate.h
+	$(CXX) -c $(CPPFLAGS) ./lib/PlayersVehiclesStat/Calculate.cpp -o ./lib/PlayersVehiclesStat/Calculate.o
 
 clean:
 	rm ./lib/*.o

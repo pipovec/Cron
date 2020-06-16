@@ -1,9 +1,12 @@
 #include "GetAccountId.h"
 
 /**
- * @hint Automaticky vytvory pripojenie k databaze
- * 
-*/
+ * @hint    Ziska zoznam account_id z databazy z tabulky players_all
+ *          a ulozi ich do queue. Jediny parameter do ide priamo
+ *          do construtora a je to SQL dotaz.
+ *          Public metoda rowCount() vrati pocet vratenych
+ *          riadkov.
+ */
 GetAccountId::GetAccountId(std::string query)
 {
     this->query = query;
@@ -15,13 +18,13 @@ GetAccountId::GetAccountId(std::string query)
  */
 GetAccountId::~GetAccountId()
 {
-    pg->~Pgsql();
+    PQfinish(conn);
 }
 
 void GetAccountId::connect()
 {    
     pg = new Pgsql;
-    conn = pg->Connect();
+    conn = pg->Get();
 }
 
 PGresult *GetAccountId::result()
@@ -31,7 +34,6 @@ PGresult *GetAccountId::result()
     
     if (PQresultStatus(result) != PGRES_TUPLES_OK)
           { std::cout << "Data z databazy neprisli" <<  PQresultErrorMessage(result) << std::endl;}
-
 
     return result;
 }
@@ -47,8 +49,7 @@ std::queue<int> GetAccountId::dataset()
 
     for(int i = 0; i < row_count; i++)
     {
-        ids.push(std::stoi(PQgetvalue(res,i,0)));
-        
+        ids.push(std::stoi(PQgetvalue(res,i,0)));        
     }
 
     PQclear(res);
