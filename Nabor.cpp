@@ -198,7 +198,7 @@ void Update2()
 /* Spocita hracove desiny */
 void LevelX(PGconn *conn, string *account_id, string *resultx)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 10) and account_id = ";
+    string sql  = "select count(tank_id) from player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 10) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;    
@@ -210,7 +210,7 @@ void LevelX(PGconn *conn, string *account_id, string *resultx)
 
 void Level8(PGconn *conn, string *account_id, string *result8)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 8) and account_id = ";
+    string sql  = "select count(tank_id) from  player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 8) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;
@@ -223,7 +223,7 @@ void Level8(PGconn *conn, string *account_id, string *result8)
 
 void Level6(PGconn *conn, string *account_id, string *result6)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 6) and account_id = ";
+    string sql  = "select count(tank_id) from player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 6) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;
