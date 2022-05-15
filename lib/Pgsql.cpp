@@ -36,11 +36,15 @@ PGconn *Pgsql::Get()
 
 PGresult *Pgsql::Query(const char *sql)
 {
-
     return PQexec(this->pgsql, sql);
 }
 
 Pgsql::~Pgsql()
 {
    PQfinish(this->pgsql);
+}
+
+void Pgsql::Disconnet()
+{
+    PQfinish(this->pgsql);
 }

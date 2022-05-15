@@ -1,9 +1,10 @@
 #include <iostream>
+#include <thread>
 #include <libpq-fe.h>
 #include <sys/time.h>
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
-#include "./lib/json.hpp"
+#include "./json/src/json.hpp"
 #include <unordered_map>
 
 /* Meranie casu */
@@ -33,8 +34,8 @@ class Players
         }
 
         // Pre Cz/Sk hracov
-        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (SELECT clan_id FROM intresting_clans)";
-        string basic_query = "select distinct(account_id) from members_role where clan_id IN (SELECT clan_id FROM intresting_clans) OFFSET ";
+        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs)";
+        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OFFSET ";
 
         // Pre vsetkch hracov v databaze
         //string basic_query_count = "select count(account_id) from players_all";
@@ -180,8 +181,8 @@ void Json(string *aids, string *json_data, int *p_ntuples, int stovka)
 
         json j;
         
-        /** Ziskanie account_id a hodnot */        
-        for (json::iterator x = js.begin(); x != js.end(); x++)        
+        /** Ziskanie account_id a hodnot */
+        for (auto& x : json::iterator_wrapper(js))
         {
             
             account_id = x.key();            

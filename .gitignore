@@ -1,6 +1,15 @@
+<<<<<<< HEAD
 
 *.o
 
 bin/
 
 lib/Pgsql.h
+=======
+*.o
+bin/*
+json/*
+tmp/*
+.vscode/*
+
+>>>>>>> b97ac2064e6279351a6548994fe2445f25dbf4b8

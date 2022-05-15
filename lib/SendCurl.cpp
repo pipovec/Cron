@@ -1,6 +1,7 @@
 #include "./SendCurl.h"
-#include "./json.hpp"
+#include "./../json/src/json.hpp"
 #include <iostream>
+#include <stdlib.h>
 #include <chrono>
 #include <thread>
 
@@ -21,37 +22,31 @@ int writer(char *data, size_t size, size_t nmemb, std::string *buffer)
     return result;
 }
 
-string SendCurl::SendRequest(string url, string postdata)
+string SendCurl::SendRequest(const char *url, const char *postdata)
 {
 
     CURL *curl;
     CURLcode res;
     string buffer;
+    string error = "Curl error";
 
     curl = curl_easy_init();
 
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata.c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-
+    
     res = curl_easy_perform(curl);
 
     /* Check for errors */
     if (res != CURLE_OK)
-    {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(res));
-
-
-        long response_code;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-        cout << "CURL response code: " << response_code << endl;
+    {        
+        curl_easy_cleanup(curl);
+        throw error;
     }
-    /* always cleanup */
+
     curl_easy_cleanup(curl);
-    url.clear();
-    postdata.clear();
 
     return buffer;
 }
@@ -106,59 +101,38 @@ string SendCurl::SendWOT(string method, string post)
     using namespace std;
 
     string data;
+    string error = "Json parse error";
     // Treba premenit string na char
     string tmp_url = server_wot + method;
-    method.clear();
+    const char *url = tmp_url.c_str();
 
     string tmp_post = api_id + post;
-    post.clear();
+    const char *postdata = tmp_post.c_str();
 
-    int control = 1;
+    data = this->SendRequest(url, postdata);
+
+    tmp_post.clear();
+    tmp_url.clear();
 
     using json = nlohmann::json;
     json js;
+    
+    js = json::parse(data);
     string status;
+    status = js["status"];
 
-    do
+    if (status == "error")
     {
-
-        data = this->SendRequest(tmp_url, tmp_post);
-
-        try
+        cout << "Chyba! :" << js << endl;
+        if (status.compare("ok") != 0)
         {
-            js = json::parse(data);
+            //string fail = js["error"]["field"].get<string>() + ", " + js["error"]["message"].get<string>() + ": " + js["error"]["value"].get<string>();
+            throw error;
         }
-        catch (json::parse_error &e)
-        {
-            cout << "Parser in SendCurl: " << e.what() << endl;
-            cout << data << endl;
-        }
+    }
 
-        status = js["status"];
-
-        if (status == "error")
-        {
-            cout << "Chyba send wot! :" << js << endl;
-            control = 1;
-
-            data.clear();
-            js.clear();
-            status.clear();
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-            cout << "Spal som 2 sekundy" << endl;
-        }
-        else
-        {
-            control = 0;
-            tmp_post.clear();
-            tmp_url.clear();            
-        }
-
-        js.clear();
-        status.clear();
-
-    } while (control == 1);
+    js.clear();
+    status.clear();
 
     return data;
 }

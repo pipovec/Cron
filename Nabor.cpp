@@ -1,4 +1,4 @@
-/**
+/*
 *   Program na kontrolu volnych Cz/Sk hracov 
 *
 *   author: Boris Fekar
@@ -109,15 +109,13 @@ void Update1()
     PGconn *conn;
     conn = pg->Get();
 
-    //string query1 = "select account_id, battles, wins FROM players_stat_all where account_id IN (select account_id from nabor_new)";
-    string query = "select psa.account_id, psa.battles as battles_all, psa. wins, pss.battles as batles_sh FROM players_stat_all psa left join players_stat_skirmish pss ON psa.account_id = pss.account_id where psa.account_id IN (select account_id from nabor_new)";
-
-    string account_id,battles_all,battles_sk,wins,update;
+    string query1 = "select account_id, battles, wins FROM players_stat_all where account_id IN (select account_id from nabor_new)";
+    string account_id,battles_all,wins,update;
     int riadkov, i;
 
     string Winrate(string battles_all, string wins);
 
-    data1 = pg->Query(query.c_str());
+    data1 = pg->Query(query1.c_str());
     riadkov = PQntuples(data1);
     
 
@@ -127,14 +125,12 @@ void Update1()
         account_id  = PQgetvalue(data1,i,0);
         battles_all = PQgetvalue(data1,i,1);
         wins        = PQgetvalue(data1,i,2);
-        battles_sk  = PQgetvalue(data1,i,3);
         
         wins        = Winrate(battles_all, wins);
 
-        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  ", battles_sk = "+battles_sk+" WHERE account_id =" + account_id;
-        
+        update = "UPDATE nabor_new SET battles_all = "+battles_all+ ", winrate = "+ wins+  " WHERE account_id =" + account_id;
         PQexec(conn,update.c_str());
-        update.clear();battles_all.clear();wins.clear();account_id.clear();battles_sk.clear();
+        update.clear();battles_all.clear();wins.clear();account_id.clear();
     }
     PQclear(data1);PQfinish(conn);
 }
@@ -202,7 +198,7 @@ void Update2()
 /* Spocita hracove desiny */
 void LevelX(PGconn *conn, string *account_id, string *resultx)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 10) and account_id = ";
+    string sql  = "select count(tank_id) from player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 10) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;    
@@ -214,7 +210,7 @@ void LevelX(PGconn *conn, string *account_id, string *resultx)
 
 void Level8(PGconn *conn, string *account_id, string *result8)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 8) and account_id = ";
+    string sql  = "select count(tank_id) from  player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 8) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;
@@ -227,7 +223,7 @@ void Level8(PGconn *conn, string *account_id, string *result8)
 
 void Level6(PGconn *conn, string *account_id, string *result6)
 {
-    string sql  = "select count(tank_id) from pvs_all where tank_id IN (select tank_id from encyclopedia_vehicles where level = 6) and account_id = ";
+    string sql  = "select count(tank_id) from player_vehicle_stat where tank_id IN (select tank_id from encyclopedia_vehicles where level = 6) and account_id = ";
     PGresult *res;
 
     sql = sql + *account_id;
@@ -238,6 +234,17 @@ void Level6(PGconn *conn, string *account_id, string *result6)
   
 }
 
+string BattlesAll(PGconn *conn, string account_id)
+{
+    PGresult *res;
+    string result;
+    string sql = "select battles from players_stat_all where account_id = " + account_id;
+    
+    res = PQexec(conn, sql.c_str());
+    result = PQgetvalue(res,0,0); 
+    PQclear(res);
+    return result;
+}
 
 /* Kontrola kolko hrac odohral bitiek za 7,14,30 dni */
 void Update3()
@@ -336,6 +343,26 @@ void History(string *p_account_id, PGconn *conn, string *p_data7, string *p_data
     
 }
 
+void Tanks() 
+{
+    Pgsql *pg = new Pgsql;
+    PGconn *conn;
+    conn = pg->Get();
+
+    string query = "SELECT freeplayers_set_tank_1(46849)";
+    PQexec(conn,query.c_str());
+
+    query = "SELECT freeplayers_set_tank_2(15617)";
+    PQexec(conn,query.c_str());
+
+    query = "SELECT freeplayers_set_tank_3(57937)";
+    PQexec(conn,query.c_str());
+
+    PQfinish(conn);
+
+}
+
+
 
 int main()
 {
@@ -354,15 +381,18 @@ int main()
     void UlozZakladHracov();
     UlozZakladHracov();
 
-    void Update1();
-    Update1(); 
-    
     void Update3();
     Update3();
 
     void Role();
     Role();
     
+    void Tanks();
+    Tanks();
+
+    void Update1();
+    Update1();
+
     void Update2();
     Update2();
     
