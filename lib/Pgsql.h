@@ -11,7 +11,7 @@
 class Pgsql
 {
     private:
-            const char *conninfo = "dbname=clan user=deamon password=sedemtri";
+            const char *conninfo = "host=/var/run/postgresql/13 dbname=clan user=deamon password=sedemtri";
 
     public:
             PGconn *Connect();

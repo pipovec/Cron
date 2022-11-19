@@ -34,11 +34,17 @@ class Players
         }
 
         // Pre Cz/Sk hracov
-        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs)";
-        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OFFSET ";
-
-        // Pre vsetkch hracov v databaze
-        //string basic_query_count = "select count(account_id) from players_all";
+        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk')";
+        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk') OFFSET ";
+	
+	//string basic_query_count = "select count(account_id) from aktualne_odchody";
+	//string basic_query = "select account_id from aktualne_odchody offset ";
+	
+	//string basic_query_count = "select count(account_id) from nabor_new";
+	//string basic_query = "select account_id from nabor_new offset ";
+        
+	// Pre vsetkch hracov v databaze 
+	//string basic_query_count = "select count(account_id) from players_all";
         //string basic_query = "select account_id from players_all offset ";
 
         // Ziskam pocet hracov v databaze
@@ -429,6 +435,7 @@ int main()
     // Najprv zistim kolko hracov budem spracovavat    
     int riadkov = players.GetPocet();
     cout << "Pocet riadkov " << riadkov << endl;
+    cout << "QUERY " << players.basic_query << endl;
     /*  Sem si deklarujem potrebne premenne aby sa v cykle nehromazdili */
     container a_ids; container *p_a_ids; p_a_ids = &a_ids; // unordered_map na account_id
     
