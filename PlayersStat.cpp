@@ -34,14 +34,14 @@ class Players
         }
 
         // Pre Cz/Sk hracov
-        string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk')";
-        string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk') OFFSET ";
+        //string basic_query_count = "select count(distinct(account_id)) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk')";
+        //string basic_query = "select distinct(account_id) from members_role where clan_id IN (select clan_id from tmp_clans_cs) OR clan_id IN (select clan_id from clan_all where language = 'cs' or language = 'sk') OFFSET ";
 	
 	//string basic_query_count = "select count(account_id) from aktualne_odchody";
 	//string basic_query = "select account_id from aktualne_odchody offset ";
 	
-	//string basic_query_count = "select count(account_id) from nabor_new";
-	//string basic_query = "select account_id from nabor_new offset ";
+	string basic_query_count = "select count(account_id) from nabor_new";
+	string basic_query = "select account_id from nabor_new offset ";
         
 	// Pre vsetkch hracov v databaze 
 	//string basic_query_count = "select count(account_id) from players_all";

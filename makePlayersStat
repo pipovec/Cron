@@ -4,7 +4,7 @@ CPPFLAGS:= --std=c++11 -Wall -O3 -I/usr/include/postgresql -fPIC
 
 
 PlayersStat: SendCurl.o Pgsql.o PlayersStat.o  ./lib/SendCurl.h  ./lib/Pgsql.h
-	$(CXX)  -o  ./bin/PlayersStatCs PlayersStat.o ./lib/SendCurl.o  ./lib/Pgsql.o $(LIBFLAGS)
+	$(CXX)  -o  ./bin/PlayersStatNaborNew PlayersStat.o ./lib/SendCurl.o  ./lib/Pgsql.o $(LIBFLAGS)
 
 SendCurl.o:	./lib/SendCurl.cpp   
 	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp  -o ./lib/SendCurl.o
