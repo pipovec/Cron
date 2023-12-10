@@ -29,17 +29,19 @@ string table = "clan_all";
 
 
 void GetClanId(fronta *p_aids, PGconn *permanent_connection){
-    
+
     //SELECT clan_id FROM clan_all  WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC;
     //string query = "SELECT clan_id FROM " + table + " WHERE language != 'cs' AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
-    string query = "SELECT clan_id FROM clan_all WHERE language='de' AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
- 
+    *//string query = "SELECT clan_id FROM clan_all WHERE language='de' AND clan_id IN (SELECT clan_id FROM tmp_clans_de) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
+    string query = "SELECT DISTINCT(clan_id) FROM clan_all WHERE language='de' OR clan_id IN (SELECT clan_id FROM tmp_clans_de) AND clan_id NOT IN (SELECT clan_id FROM clan_all_empty) ORDER BY clan_id DESC";
+
+
     PGresult *result;
 
     result = PQexec(permanent_connection, query.c_str());
     if (PQresultStatus(result) != PGRES_TUPLES_OK)
         {cout << "Chyba select clan_all" <<  PQresultErrorMessage(result) << endl;}
-        
+
     int riadkov     = PQntuples(result);
 
     cout << "Pocet klanov na spracovanie: " << riadkov << endl;
@@ -80,10 +82,10 @@ void SendPost(string clan_id, string *json){
     string field(text);
     int x = 1;
     chrono::seconds dura(3); // pausa 3 sec
-    
+
     const string method   = "/clans/info/";
 
-    string post_data = field  + "&clan_id="+ clan_id;    
+    string post_data = field  + "&clan_id="+ clan_id;
 
     SendCurl send;
 
@@ -96,7 +98,7 @@ void SendPost(string clan_id, string *json){
             cout << e.what() << endl;
             this_thread::sleep_for( dura );
             x = 1;
-            
+
         }
     }
     while(x != 0);
@@ -130,11 +132,11 @@ class Spracuj{
         typedef map<int,player> mymap;
 
         mymap fresh, players_all, members_role;
-        
+
 
         Spracuj(int clan_id[100], string json, PGconn *conn)
         {
-            
+
             this->permanent_connection = conn;
 
             int i = 0, cid, members_count;
@@ -192,7 +194,7 @@ class Spracuj{
                 players_all.clear();fresh.clear();members_role.clear();clan_data.clear();
 
 
-            }            
+            }
         }
 
 
@@ -205,7 +207,7 @@ class Spracuj{
         private:
 
             PGconn *permanent_connection;
-            
+
             void spracuj_players_all(int clan_id, mymap players_all, mymap fresh)
             {
                 map<int,player>::iterator it;
@@ -328,7 +330,7 @@ class Spracuj{
                     cout << "Chyba json vyber klan id" << endl;
                     cout << clan_data << endl;
                 }
-                
+
 
                 if(*members_count == 0){clan_data.clear();}
 
@@ -524,7 +526,7 @@ class Spracuj{
                 string query = "UPDATE clan_all SET members_count = "+to_string(members_count)+" WHERE clan_id = " + to_string(cid) ;
                 PQexec(this->permanent_connection, query.c_str());
             }
-        
+
 
 
             void exec_select_players_all(int clan_id)
@@ -555,7 +557,7 @@ class Spracuj{
                 PQclear(result);
 
             }
-            
+
 
             void exec_select_members_role(int clan_id)
             {
@@ -629,7 +631,7 @@ int main(){
 
     cout << "*********************************"<< endl;
     cout << endl << "Program zacal pracovat: " << ctime(&startprog) << endl;
-    
+
     chrono::time_point<chrono::high_resolution_clock> start, t1, t2,main1,main2;
 
     /** Spustim meranie cas */
@@ -637,7 +639,7 @@ int main(){
 
     // Vytvor permanentne spojenie k databaze
 
-    PGconn *permanent_connection;    
+    PGconn *permanent_connection;
     Pgsql *pg = new Pgsql;
     permanent_connection = pg->Get();
 
@@ -657,19 +659,19 @@ int main(){
     {
         main1 = chrono::high_resolution_clock::now();
 	i++;
-        
+
         Get100Id(p_clan_id, p_cids, a_clan_id); // Ziskam string pre poslanie na server a pole intov na dalsie spracovanie
 
         SendPost(clan_id, p_json); // Poslem udaje na server a vyzdvihnem cerstvy material
 
         Spracuj *doit = new Spracuj(a_clan_id, json, permanent_connection);
-        
+
         clan_id.clear();json.clear();CleaArray(a_clan_id);
 
         delete doit;
 
 
-    /** Pausa pred dalsim kolom na ulozenie databazy */ 
+    /** Pausa pred dalsim kolom na ulozenie databazy */
     chrono::seconds dura(5); // pausa 3 sec
     this_thread::sleep_for( dura );
 
@@ -677,7 +679,7 @@ int main(){
 	chrono::duration<double> elapsed_main = main2-main1;
 
 	cout << elapsed_main.count() <<" Sucasne kolo: " << i << " Zostava cids: "<< cids.size() << endl;
-        
+
 
     }
 
