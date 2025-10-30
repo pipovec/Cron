@@ -191,7 +191,6 @@ private:
         if (PQresultStatus(result) != PGRES_TUPLES_OK) {
             cerr << "Error loading ETV table: " << PQresultErrorMessage(result) << endl;
             PQclear(result);
-            PQfinish(conn);
             return;
         }
 
@@ -211,7 +210,7 @@ private:
         }
 
         PQclear(result);
-        PQfinish(conn);
+        // Destruktor Pgsql automaticky zavolá PQfinish
 
         cout << "Loaded " << etv_table.size() << " entries from ETV table" << endl;
     }
@@ -233,7 +232,6 @@ vector<int> LoadAccountIds() {
     if (PQresultStatus(result) != PGRES_TUPLES_OK) {
         cerr << "Error in LoadAccountIds: " << PQresultErrorMessage(result) << endl;
         PQclear(result);
-        PQfinish(conn);
         return {};
     }
 
@@ -246,7 +244,7 @@ vector<int> LoadAccountIds() {
     }
 
     PQclear(result);
-    PQfinish(conn);
+    // Destruktor Pgsql automaticky zavolá PQfinish
 
     return ids;
 }
@@ -323,7 +321,7 @@ void SaveWN8Values(const wn8value& wn8_values) {
 
     result = PQexec(conn, q_insert.c_str());
     PQclear(result);
-    PQfinish(conn);
+    // Destruktor Pgsql automaticky zavolá PQfinish
 }
 
 // Worker thread funkcia
