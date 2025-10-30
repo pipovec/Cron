@@ -21,8 +21,8 @@ using namespace std;
 // Konstanty
 constexpr const char* MASTER_QUERY = "SELECT account_id FROM players_all";
 constexpr int BATCH_SIZE = 100;
-constexpr int SAVE_THRESHOLD = 2500;
-constexpr size_t NUM_THREADS = 4; // Počet vlákien pre paralelizáciu
+constexpr int SAVE_THRESHOLD = 5000;
+constexpr size_t NUM_THREADS = 6; // Počet vlákien pre paralelizáciu (optimálne pre 8-jadrový server)
 
 // Typy
 using timestamp_t = unsigned long long;
