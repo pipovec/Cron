@@ -9,8 +9,8 @@ using namespace std;
 
 /*
 *   Trieda Clans je potom triedy SendCurl.
-*   Pripaja sa na domenu WGN a ziskava udaje o klanoch 
-*   pomoc motody Clans     
+*   Pripaja sa na domenu WGN a ziskava udaje o klanoch
+*   pomoc motody Clans
 *
 *   author: pipovec
 */
@@ -26,11 +26,11 @@ class Clans
             string ClansRatings(string post);   // Informacie o ratingu klanov,
 
     private:
-            
-            
-            
-            
-            
+
+
+
+
+
 
 };
 
