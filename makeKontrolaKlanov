@@ -1,14 +1,112 @@
-LIBFLAGS:=  -L/usr/lib/x86_64-linux-gnu -lcurl  -lpq -lpthread
-CPPFLAGS:=  --std=c++11 -Wall -o3 -I/usr/include/postgresql
+###########################################
+# Makefile pre KontrolaKlanov
+# Optimalizovana verzia s batch processing
+# C++17 standard
+###########################################
 
-KontrolaKlanov: KontrolaKlanov.o SendCurl.o Pgsql.o ./lib/SendCurl.h  ./lib/Pgsql.h
-	$(CXX) -o ./bin/KontrolaKlanov ./KontrolaKlanov.o ./lib/SendCurl.o  ./lib/Pgsql.o $(LIBFLAGS)
+# Compiler a flagy
+CXX := g++
+CPPFLAGS := --std=c++17 -Wall -Wextra -O3 -I/usr/include/postgresql
+LIBFLAGS := -L/usr/lib/x86_64-linux-gnu -lcurl -lpq -lpthread
 
-KontrolaKlanov.o:	KontrolaKlanov.cpp
+# Farby pre output
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+NC := \033[0m # No Color
+
+# Ciele
+TARGET := ./bin/KontrolaKlanov
+OBJDIR := ./obj
+
+# Objektove subory
+OBJS := ./KontrolaKlanov.o \
+        ./lib/KontrolaKlanov/ClanData.o \
+        ./lib/KontrolaKlanov/ClanProcessor.o \
+        ./lib/SendCurl.o \
+        ./lib/Pgsql.o
+
+# Defaultny ciel
+.DEFAULT_GOAL := all
+
+# Hlavny ciel
+all: check_bin $(TARGET)
+	@echo "$(GREEN)Kompilacia uspesna!$(NC)"
+	@echo "Spustit: $(TARGET)"
+
+# Kontrola ci existuje bin directory
+check_bin:
+	@mkdir -p ./bin
+
+# Linkovanie finalneho programu
+$(TARGET): $(OBJS)
+	@echo "$(YELLOW)Linkujem $(TARGET)...$(NC)"
+	$(CXX) -o $(TARGET) $(OBJS) $(LIBFLAGS)
+
+# Kompilácia hlavneho programu
+./KontrolaKlanov.o: KontrolaKlanov.cpp ./lib/Pgsql.h ./lib/SendCurl.h \
+                     ./lib/KontrolaKlanov/ClanData.h ./lib/KontrolaKlanov/ClanProcessor.h
+	@echo "$(YELLOW)Kompilujem KontrolaKlanov.cpp...$(NC)"
 	$(CXX) -c $(CPPFLAGS) KontrolaKlanov.cpp -o ./KontrolaKlanov.o
 
-SendCurl.o:	./lib/SendCurl.cpp   
-	$(CXX) -c $(CPPFLAGS)  ./lib/SendCurl.cpp  -o ./lib/SendCurl.o
+# Kompilácia ClanData
+./lib/KontrolaKlanov/ClanData.o: ./lib/KontrolaKlanov/ClanData.cpp ./lib/KontrolaKlanov/ClanData.h
+	@echo "$(YELLOW)Kompilujem ClanData.cpp...$(NC)"
+	$(CXX) -c $(CPPFLAGS) ./lib/KontrolaKlanov/ClanData.cpp -o ./lib/KontrolaKlanov/ClanData.o
 
-Pgsql.o: ./lib/Pgsql.cpp
-	$(CXX) -c $(CPPFLAGS)  ./lib/Pgsql.cpp  -o ./lib/Pgsql.o
+# Kompilácia ClanProcessor
+./lib/KontrolaKlanov/ClanProcessor.o: ./lib/KontrolaKlanov/ClanProcessor.cpp ./lib/KontrolaKlanov/ClanProcessor.h \
+                                       ./lib/KontrolaKlanov/ClanData.h ./lib/Pgsql.h
+	@echo "$(YELLOW)Kompilujem ClanProcessor.cpp...$(NC)"
+	$(CXX) -c $(CPPFLAGS) ./lib/KontrolaKlanov/ClanProcessor.cpp -o ./lib/KontrolaKlanov/ClanProcessor.o
+
+# Kompilácia SendCurl
+./lib/SendCurl.o: ./lib/SendCurl.cpp ./lib/SendCurl.h
+	@echo "$(YELLOW)Kompilujem SendCurl.cpp...$(NC)"
+	$(CXX) -c $(CPPFLAGS) ./lib/SendCurl.cpp -o ./lib/SendCurl.o
+
+# Kompilácia Pgsql
+./lib/Pgsql.o: ./lib/Pgsql.cpp ./lib/Pgsql.h
+	@echo "$(YELLOW)Kompilujem Pgsql.cpp...$(NC)"
+	$(CXX) -c $(CPPFLAGS) ./lib/Pgsql.cpp -o ./lib/Pgsql.o
+
+# Vymazanie objektovych suborov a binarky
+clean:
+	@echo "$(YELLOW)Cistim objektove subory...$(NC)"
+	rm -f ./KontrolaKlanov.o ./lib/KontrolaKlanov/ClanData.o ./lib/KontrolaKlanov/ClanProcessor.o \
+		./lib/SendCurl.o ./lib/Pgsql.o $(TARGET)
+	@echo "$(GREEN)Vycistene!$(NC)"
+
+# Clean build (vymaze a znova skompiluje)
+rebuild: clean all
+
+# Instalacia zavislosti (Ubuntu/Debian)
+install-deps:
+	@echo "$(YELLOW)Instalujem zavislosti...$(NC)"
+	sudo apt-get update
+	sudo apt-get install -y build-essential libpq-dev libcurl4-openssl-dev
+	@echo "$(GREEN)Zavislosti nainstalovane!$(NC)"
+
+# Spustenie programu
+run: all
+	$(TARGET)
+
+# Help
+help:
+	@echo "KontrolaKlanov Makefile"
+	@echo ""
+	@echo "Dostupne ciele:"
+	@echo "  make              - Skompiluje program (default)"
+	@echo "  make all          - Skompiluje program"
+	@echo "  make clean        - Vymaze objektove subory a binarku"
+	@echo "  make rebuild      - Vymaze a znova skompiluje"
+	@echo "  make run          - Skompiluje a spusti program"
+	@echo "  make install-deps - Nainstaluje systemove zavislosti"
+	@echo "  make help         - Zobrazi tuto napovedu"
+	@echo ""
+	@echo "Optimalizacie:"
+	@echo "  - Batch processing (100 klanov)"
+	@echo "  - Hash mapy pre O(1) lookup"
+	@echo "  - API rate limiting (15 req/s)"
+	@echo "  - Reconnect logika pre DB"
+
+.PHONY: all clean rebuild install-deps run help check_bin
