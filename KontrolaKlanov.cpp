@@ -234,6 +234,16 @@ int main() {
     cout << endl << "Ukladam posledne zmeny..." << endl;
     processor.FlushBatches();
 
+    // Oznac neaktivne klany (2 typy)
+    cout << endl << "Kontrolujem neaktivne/rozpustene klany..." << endl;
+    int inactive_count = processor.GetInactiveClansCount();
+    if(inactive_count > 0) {
+        cout << "Najdenych " << inactive_count << " neaktivnych klanov" << endl;
+        processor.MarkInactiveClans();
+    } else {
+        cout << "Ziadne neaktivne klany" << endl;
+    }
+
     auto end_time = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::seconds>(end_time - start_time);
 

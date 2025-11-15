@@ -5,17 +5,24 @@ ClanData::ClanData() {}
 ClanData::~ClanData() {}
 
 void ClanData::EscapeName() {
-    string ch = "'";
-    size_t found = name.find(ch);
+    // Escape VSETKY apostrofy v name, tag a ostatnych poliach
+    name = EscapeString(name);
+    tag = EscapeString(tag);
+}
 
-    if(found != string::npos) {
-        name.insert(found, ch);
+string ClanData::EscapeString(const string& str) {
+    string result;
+    result.reserve(str.size() + 10); // Reserve extra space
 
-        size_t found1 = name.find(ch, found + 2);
-        if(found1 != string::npos) {
-            name.insert(found1, ch);
+    for(char c : str) {
+        if(c == '\'') {
+            result += "''";  // SQL escape: ' -> ''
+        } else {
+            result += c;
         }
     }
+
+    return result;
 }
 
 string ClanData::ToInsertValues() const {

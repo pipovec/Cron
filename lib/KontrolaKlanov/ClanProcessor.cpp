@@ -49,9 +49,29 @@ void ClanProcessor::ProcessJsonData(const string& json_string, vector<ClanData>&
 
     for (auto& x : js["data"].items()) {
         json j = x.value();
+
+        // Ziskaj clan_id (vzdy je pritomny)
+        string clan_id;
+        if(j.contains("clan_id")) {
+            clan_id = to_string(j["clan_id"].get<int>());
+            // Oznac tento clan_id ako videny v API
+            processed_clan_ids.insert(clan_id);
+        }
+
+        // Kontrola ci klan ma vsetky data - ak nie, je rozpusteny
+        if(j.is_null() || !j.contains("tag") || !j.contains("name") ||
+           j["tag"].is_null() || j["name"].is_null()) {
+            // Klan je rozpusteny - ma len clan_id ale ziadne data
+            if(!clan_id.empty()) {
+                disbanded_clans.push_back(clan_id);
+                cout << "Detekovan rozpusteny klan: " << clan_id << endl;
+            }
+            continue; // Preskoc tento klan
+        }
+
         ClanData clan;
 
-        clan.clan_id = to_string(j["clan_id"].get<int>());
+        clan.clan_id = clan_id;
         clan.tag = j["tag"].get<string>();
         clan.created_at = to_string(j["created_at"].get<int>());
         clan.name = j["name"].get<string>();
@@ -195,4 +215,75 @@ bool ClanProcessor::NeedsUpdate(const ClanData& new_data, const ClanData& old_da
             new_data.emblem32 != old_data.emblem32 ||
             new_data.emblem64 != old_data.emblem64 ||
             new_data.emblem195 != old_data.emblem195);
+}
+
+void ClanProcessor::MarkInactiveClans() {
+    vector<string> all_inactive_clans;
+
+    // TYP 1: Rozpustene klany (prisli z API ale bez dat)
+    all_inactive_clans.insert(all_inactive_clans.end(),
+                              disbanded_clans.begin(),
+                              disbanded_clans.end());
+
+    // TYP 2: Klany ktore vobec neprisli z API (uz neexistuju v zozname)
+    vector<string> missing_clans;
+    for(const auto& [clan_id, clan_data] : existing_clans) {
+        if(processed_clan_ids.find(clan_id) == processed_clan_ids.end()) {
+            // Tento klan je v DB, ale vobec neprišiel z API
+            missing_clans.push_back(clan_id);
+        }
+    }
+
+    if(!missing_clans.empty()) {
+        cout << "Najdenych " << missing_clans.size()
+             << " klanov, ktore vobec neprisli z API" << endl;
+        all_inactive_clans.insert(all_inactive_clans.end(),
+                                 missing_clans.begin(),
+                                 missing_clans.end());
+    }
+
+    if(all_inactive_clans.empty()) {
+        cout << "Ziadne neaktivne/rozpustene klany" << endl;
+        return;
+    }
+
+    // Vloz vsetky neaktivne klany do tabulky clan_all_empty
+    string insert_query = "INSERT INTO clan_all_empty (clan_id) VALUES ";
+
+    for(size_t i = 0; i < all_inactive_clans.size(); i++) {
+        insert_query += "(" + all_inactive_clans[i] + ")";
+        if(i < all_inactive_clans.size() - 1) {
+            insert_query += ",";
+        }
+    }
+
+    // Pouzi ON CONFLICT aby sa nepridavali duplicity
+    insert_query += " ON CONFLICT (clan_id) DO NOTHING";
+
+    PGresult* result = PQexec(conn, insert_query.c_str());
+
+    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+        cerr << "Chyba pri zapisovani neaktivnych klanov: "
+             << PQresultErrorMessage(result) << endl;
+    } else {
+        cout << "Celkom zapisanych " << all_inactive_clans.size()
+             << " neaktivnych klanov do clan_all_empty" << endl;
+        cout << "  - Rozpustene (bez dat): " << disbanded_clans.size() << endl;
+        cout << "  - Chybaju v API: " << missing_clans.size() << endl;
+    }
+
+    PQclear(result);
+}
+
+int ClanProcessor::GetInactiveClansCount() const {
+    int count = disbanded_clans.size();
+
+    // Pridaj klany ktore vobec neprisli z API
+    for(const auto& [clan_id, clan_data] : existing_clans) {
+        if(processed_clan_ids.find(clan_id) == processed_clan_ids.end()) {
+            count++;
+        }
+    }
+
+    return count;
 }

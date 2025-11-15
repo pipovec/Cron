@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -34,9 +35,13 @@ private:
     // Cache existujucich klanov z DB
     unordered_map<string, ClanData> existing_clans;
 
+    // Sledovanie vsetkych clan_id z API (aj prazdnych, aj plnych)
+    unordered_set<string> processed_clan_ids;
+
     // Batch buffery
     vector<ClanData> insert_batch;
     vector<ClanData> update_batch;
+    vector<string> disbanded_clans;  // Rozpustene klany (iba clan_id v API)
 
     mutex batch_mutex;
 
@@ -63,6 +68,12 @@ public:
 
     // Batch update
     void BatchUpdate(const vector<ClanData>& clans);
+
+    // Oznaci klany ktore uz neexistuju v API ako neaktivne
+    void MarkInactiveClans();
+
+    // Ziska pocet neaktivnych klanov
+    int GetInactiveClansCount() const;
 
 private:
     // Porovnanie dvoch klanov

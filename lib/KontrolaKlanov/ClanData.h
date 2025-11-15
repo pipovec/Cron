@@ -27,7 +27,7 @@ public:
     ClanData();
     ~ClanData();
 
-    // Escape apostrofy v mene pre SQL
+    // Escape apostrofy v mene a tagu pre SQL
     void EscapeName();
 
     // Vygeneruje INSERT VALUES string pre tento klan
@@ -35,6 +35,10 @@ public:
 
     // Vygeneruje UPDATE VALUES string pre tento klan
     string ToUpdateValues() const;
+
+private:
+    // Pomocna metoda - escape vsetkych apostrofov v stringu
+    static string EscapeString(const string& str);
 };
 
 #endif
