@@ -123,7 +123,7 @@ void executeTankFunctions(DatabaseManager* dbManager)
     PGresult* res3 = dbManager->executeQuery(conn, "SELECT freeplayers_set_tank_3(57937)");
     if (res3) PQclear(res3);
 
-    cout << "Tank funkcie dokoncene" << endl;1
+    cout << "Tank funkcie dokoncene" << endl;
 }
 
 // Ulozenie dat do databazy pomocou batch processingu
