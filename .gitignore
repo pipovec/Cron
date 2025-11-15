@@ -1,15 +1,18 @@
-<<<<<<< HEAD
-
+# Objektove subory
 *.o
 
+# Binarne subory
 bin/
-
-lib/Pgsql.h
-=======
-*.o
 bin/*
+Nabor
+
+# JSON a docasne subory
 json/*
 tmp/*
-.vscode/*
 
->>>>>>> b97ac2064e6279351a6548994fe2445f25dbf4b8
+# IDE konfiguracne subory
+.vscode/*
+.idea/
+
+# PostgreSQL header (ak je generovany)
+lib/Pgsql.h
