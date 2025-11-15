@@ -1,0 +1,44 @@
+# Makefile pre optimalizovanu verziu Nabor
+# Kompilacia: make -f Makefile_Nabor
+# Cistenie: make -f Makefile_Nabor clean
+
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -pthread -I/usr/include/postgresql
+LDFLAGS = -lpq -lpthread
+
+TARGET = Nabor
+LIBDIR = lib/nabor
+
+# Zdrojove subory (triedy specificke pre Nabor.cpp)
+SOURCES = Nabor.cpp \
+          $(LIBDIR)/DatabaseManager.cpp \
+          $(LIBDIR)/BatchProcessor.cpp \
+          $(LIBDIR)/PlayerDataCollector.cpp
+
+# Objektove subory
+OBJECTS = $(SOURCES:.cpp=.o)
+
+# Hlavny ciel
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Kompilacia dokoncena: ./$(TARGET)"
+
+# Pravidlo pre kompilaciu .cpp -> .o
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Cistenie
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+	@echo "Vycistene"
+
+# Rebuild
+rebuild: clean all
+
+# Spustenie
+run: $(TARGET)
+	./$(TARGET)
+
+.PHONY: all clean rebuild run
