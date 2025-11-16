@@ -48,8 +48,6 @@
 
 #include <iostream>
 #include <sys/time.h>
-#include <thread>
-#include <future>
 #include <vector>
 #include "./lib/nabor/DatabaseManager.h"
 #include "./lib/nabor/BatchProcessor.h"
