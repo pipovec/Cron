@@ -203,16 +203,12 @@ int main()
 
         cout << "Uspesne ulozene: " << players.size() << " hracov" << endl;
 
-        // FAZA 4: Spustenie pomocnych funkcii paralelne
-        cout << "\n[4/5] Spustam pomocne funkcie (paralelne)..." << endl;
+        // FAZA 4: Spustenie pomocnych funkcii sekvenčne (kvôli deadlockom)
+        cout << "\n[4/5] Spustam pomocne funkcie..." << endl;
 
-        // Spusti Role a Tanks funkcie v separatnych threadoch
-        auto roleTask = async(launch::async, executeRoleFunctions, &dbManager);
-        auto tankTask = async(launch::async, executeTankFunctions, &dbManager);
-
-        // Cakaj na dokoncenie oboch
-        roleTask.wait();
-        tankTask.wait();
+        // Spusti funkcie sekvenčne (obe updatujú nabor_new tabulku)
+        executeRoleFunctions(&dbManager);
+        executeTankFunctions(&dbManager);
 
         // FAZA 5: Vacuum tabulky
         cout << "\n[5/5] Optimalizujem tabulku..." << endl;

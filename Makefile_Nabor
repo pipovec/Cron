@@ -6,7 +6,8 @@ CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -pthread -I/usr/include/postgresql
 LDFLAGS = -lpq -lpthread
 
-TARGET = Nabor
+BINDIR = bin
+TARGET = $(BINDIR)/Nabor
 LIBDIR = lib/nabor
 
 # Zdrojove subory (triedy specificke pre Nabor.cpp)
@@ -22,8 +23,9 @@ OBJECTS = $(SOURCES:.cpp=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
+	@mkdir -p $(BINDIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
-	@echo "Kompilacia dokoncena: ./$(TARGET)"
+	@echo "Kompilacia dokoncena: $(TARGET)"
 
 # Pravidlo pre kompilaciu .cpp -> .o
 %.o: %.cpp
@@ -39,6 +41,6 @@ rebuild: clean all
 
 # Spustenie
 run: $(TARGET)
-	./$(TARGET)
+	$(TARGET)
 
 .PHONY: all clean rebuild run
