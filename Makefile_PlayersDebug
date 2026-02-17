@@ -1,0 +1,132 @@
+#
+# Makefile pre PlayersDebug - DEBUG verzia pre inspekciu JSON pri prazdnych klanoch
+#
+# Kompilacia: make -f Makefile_PlayersDebug
+# Spustenie: ./PlayersDebug CS|DE|PL|FR|ALL
+#
+# Author: Boris Fekar
+# Date: 2025-11-20
+#
+
+# Compiler a flagy
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I. -I/usr/include/postgresql
+LDFLAGS = -lpq -lcurl -lpthread
+
+# Adresare
+OBJDIR = obj
+BINDIR = bin
+LIBDIR = lib
+
+# Vytvor adresare ak neexistuju
+$(shell mkdir -p $(OBJDIR) $(BINDIR))
+
+# Cielovy program
+TARGET = $(BINDIR)/PlayersDebug
+
+# Zdrojove subory
+MAIN_SRC = PlayersDebug.cpp
+LIB_SRCS = $(LIBDIR)/Pgsql.cpp \
+           $(LIBDIR)/SendCurl.cpp \
+           $(LIBDIR)/QueryBuilder.cpp \
+           $(LIBDIR)/PlayerProcessorDebug.cpp
+
+# Objektove subory
+MAIN_OBJ = $(OBJDIR)/PlayersDebug.o
+LIB_OBJS = $(OBJDIR)/Pgsql.o \
+           $(OBJDIR)/SendCurl.o \
+           $(OBJDIR)/QueryBuilder.o \
+           $(OBJDIR)/PlayerProcessorDebug.o
+
+# Vsetky objektove subory
+OBJS = $(MAIN_OBJ) $(LIB_OBJS)
+
+# Hlavicky
+HEADERS = $(LIBDIR)/Pgsql.h \
+          $(LIBDIR)/SendCurl.h \
+          $(LIBDIR)/QueryBuilder.h \
+          $(LIBDIR)/PlayerProcessorDebug.h
+
+# Hlavny ciel
+all: $(TARGET)
+
+# Linkovanie
+$(TARGET): $(OBJS)
+	@echo "Linkovanie DEBUG verzie: $@"
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo ""
+	@echo "============================================================"
+	@echo "  DEBUG verzia skompilovana uspesne!"
+	@echo "============================================================"
+	@echo ""
+	@echo "Program sa ZASTAVI a vypise JSON pri detekcii prazdneho klanu"
+	@echo ""
+	@echo "Spustenie:"
+	@echo "  ./$(TARGET) CS   - Ceske a Slovenske klany"
+	@echo "  ./$(TARGET) DE   - Nemecke klany"
+	@echo "  ./$(TARGET) PL   - Polske klany"
+	@echo "  ./$(TARGET) FR   - Francuzske klany"
+	@echo "  ./$(TARGET) ALL  - Vsetky ostatne klany"
+	@echo ""
+
+# Kompilacia hlavneho programu
+$(OBJDIR)/PlayersDebug.o: $(MAIN_SRC) $(HEADERS)
+	@echo "Kompilujem DEBUG: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Kompilacia kniznic
+$(OBJDIR)/Pgsql.o: $(LIBDIR)/Pgsql.cpp $(LIBDIR)/Pgsql.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/SendCurl.o: $(LIBDIR)/SendCurl.cpp $(LIBDIR)/SendCurl.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/QueryBuilder.o: $(LIBDIR)/QueryBuilder.cpp $(LIBDIR)/QueryBuilder.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/PlayerProcessorDebug.o: $(LIBDIR)/PlayerProcessorDebug.cpp $(LIBDIR)/PlayerProcessorDebug.h \
+                                   $(LIBDIR)/SendCurl.h $(LIBDIR)/Pgsql.h
+	@echo "Kompilujem DEBUG: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Cistenie
+clean:
+	@echo "Cistenie objektovych suborov..."
+	rm -f $(OBJDIR)/*.o
+	@echo "Hotovo"
+
+# Uplne cistenie (vratane biniek)
+distclean: clean
+	@echo "Cistenie binarnych suborov..."
+	rm -f $(TARGET)
+	@echo "Hotovo"
+
+# Rebuild
+rebuild: distclean all
+
+# Info
+info:
+	@echo "============================================="
+	@echo "PlayersDebug - DEBUG verzia pre inspekciu"
+	@echo "============================================="
+	@echo "Compiler:    $(CXX)"
+	@echo "C++ Standard: C++17"
+	@echo "Flags:       $(CXXFLAGS)"
+	@echo "Libraries:   $(LDFLAGS)"
+	@echo "Target:      $(TARGET)"
+	@echo ""
+	@echo "FUNKCIA:"
+	@echo "  Program sa ZASTAVI pri detekcii prazdneho klanu"
+	@echo "  a vypise CELY JSON odpoved zo servera"
+	@echo ""
+	@echo "Prikazy:"
+	@echo "  make -f Makefile_PlayersDebug        - Kompilacia"
+	@echo "  make -f Makefile_PlayersDebug clean  - Vymazanie .o suborov"
+	@echo "  make -f Makefile_PlayersDebug distclean - Vymazanie vsetkeho"
+	@echo "  make -f Makefile_PlayersDebug rebuild - Rebuild projektu"
+	@echo "  make -f Makefile_PlayersDebug info    - Tato informacia"
+
+.PHONY: all clean distclean rebuild info
