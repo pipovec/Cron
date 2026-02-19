@@ -1,15 +1,20 @@
 #include "./Pgsql.h"
+#include "./DbConfig.h"
 #include <libpq-fe.h>
 #include <iostream>
 
 Pgsql::Pgsql() : connected(false), pgsql(nullptr)
 {
+    conninfo = DbConfig::LoadConninfo(
+        DbConfig::GetConfigPath(),
+        "host=/var/run/postgresql port=5433 dbname=clan user=deamon password=sedemtri"
+    );
     this->pgsql = this->Connect();
 }
 
 PGconn *Pgsql::Connect()
 {
-    PGconn *con = PQconnectdb(conninfo);
+    PGconn *con = PQconnectdb(conninfo.c_str());
 
     if (PQstatus(con) != CONNECTION_OK) {
         std::cerr << "Chyba pri vytvarani spojenia do databazy!" << std::endl

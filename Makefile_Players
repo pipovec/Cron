@@ -10,7 +10,8 @@
 
 # Compiler a flagy
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I. -I/usr/include/postgresql
+JSON_INCLUDE = ./json/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I. -I/usr/include/postgresql -I$(JSON_INCLUDE)
 LDFLAGS = -lpq -lcurl -lpthread
 
 # Adresare

@@ -17,7 +17,7 @@
 class DatabaseManager
 {
 private:
-    const char *conninfo = "host=/var/run/postgresql port=5433 dbname=clan user=deamon password=sedemtri";
+    std::string conninfo;
     std::queue<PGconn*> connectionPool;
     std::mutex poolMutex;
     std::condition_variable poolCondition;

@@ -1,9 +1,14 @@
 #include "DatabaseManager.h"
+#include "../DbConfig.h"
 #include <iostream>
 
 DatabaseManager::DatabaseManager(size_t initialSize, size_t maxSize)
     : poolSize(0), maxPoolSize(maxSize)
 {
+    conninfo = DbConfig::LoadConninfo(
+        DbConfig::GetConfigPath(),
+        "host=/var/run/postgresql port=5433 dbname=clan user=deamon password=sedemtri"
+    );
     for (size_t i = 0; i < initialSize; ++i) {
         PGconn* conn = createConnection();
         if (conn) {
@@ -25,7 +30,7 @@ DatabaseManager::~DatabaseManager()
 
 PGconn* DatabaseManager::createConnection()
 {
-    PGconn* conn = PQconnectdb(conninfo);
+    PGconn* conn = PQconnectdb(conninfo.c_str());
 
     if (PQstatus(conn) != CONNECTION_OK) {
         std::cerr << "Chyba pri vytvarani spojenia: "

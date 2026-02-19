@@ -21,7 +21,7 @@
 class Pgsql
 {
     private:
-            const char *conninfo = "host=/var/run/postgresql port=5433 dbname=clan user=deamon password=sedemtri";
+            std::string conninfo;
             bool connected;
 
             // Interni reconnect

@@ -12,6 +12,8 @@
 #include <libpq-fe.h>
 #include <sys/time.h>
 #include <thread>
+#include <string>
+#include "./lib/DbConfig.h"
 
 using namespace std; 
 
@@ -22,10 +24,12 @@ class Databaza
     PGconn *Connect()
     {
         PGconn  *conn;
-        const char *conninfo;
-        conninfo = "dbname=clan user=deamon password=sedemtri";
+        std::string conninfo = DbConfig::LoadConninfo(
+            DbConfig::GetConfigPath(),
+            "dbname=clan user=deamon password=sedemtri"
+        );
 
-        conn = PQconnectdb(conninfo);
+        conn = PQconnectdb(conninfo.c_str());
         /* Check to see that the backend connection was successfully made */
         if (PQstatus(conn) != CONNECTION_OK)
         {

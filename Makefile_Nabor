@@ -3,7 +3,8 @@
 # Cistenie: make -f Makefile_Nabor clean
 
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -pthread -I/usr/include/postgresql
+JSON_INCLUDE = ./json/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -pthread -I/usr/include/postgresql -I$(JSON_INCLUDE)
 LDFLAGS = -lpq -lpthread
 
 BINDIR = bin
