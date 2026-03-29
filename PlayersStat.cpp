@@ -2,8 +2,11 @@
 #include <thread>
 #include <libpq-fe.h>
 #include <sys/time.h>
+#include <iomanip>
+#include <sstream>
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
+#include "./lib/CronLog.h"
 #include "./json/src/json.hpp"
 #include <unordered_map>
 
@@ -466,6 +469,8 @@ void CleanUp()
 
 int main()
 {
+    CronLog::ScopedRun cron_log("cplusplus:PlayersStatNaborNew");
+
     timestamp_t t0 = get_timestamp();
     /* Informacia o case zacatia programu */
     time_t start, stop;
@@ -525,9 +530,11 @@ int main()
     int *p_ntuples;
     p_ntuples = &ntuples; // Kolko hracov sa mi vratilo z databazy
     int spracovanych = 0;
+    int kolo = 0;
 
     for (int i = 0; i < riadkov; i += 500) // Tu si nastavim po kolko hracov naraz budem spracovavat
     {
+        kolo++;
         players.GetPlayers(i, p_a_ids, p_ntuples); // ziskam do unordered_map int account_id
 
         if (ntuples < 500)
@@ -598,5 +605,26 @@ int main()
     time(&stop);
     cout << "Cas:\t\t" << secs << endl;
     cout << "Program skoncil pracovat: " << ctime(&stop) << endl;
+
+    std::ostringstream info;
+    info << std::fixed << std::setprecision(3);
+    info << "STATISTIKA SPRACOVANIA "
+         << "Typ=PlayersStatNaborNew"
+         << " Kola=" << kolo
+         << " Cas=" << secs << "s"
+         << " Klany=0"
+         << " Hraci=" << spracovanych
+         << " Prichody=0"
+         << " Odchody=0"
+         << " NoveID=0"
+         << " Nicky=0"
+         << " Ukoncene=0"
+         << " Updaty=0"
+         << " Inserty=0"
+         << " Spracovane=" << spracovanych
+         << " MissingStats=0"
+         << " MissingVehicles=0"
+         << " Neaktivne=0";
+    cron_log.SetInfo(info.str());
     return 0;
 }

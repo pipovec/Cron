@@ -1,143 +1,134 @@
-#include <iostream>
-#include <string>
-#include <libpq-fe.h>
-#include <sys/time.h>
-#include <unordered_map>
 #include <algorithm>
-#include <vector>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 #include <atomic>
-#include <memory>
+#include <chrono>
 #include <ctime>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <cstdlib>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+
+#include <libpq-fe.h>
 
 #include "./lib/Pgsql.h"
+#include "./lib/CronLog.h"
 #include "./lib/GetPlayersStats.h"
 #include "./lib/GetPlayersVehicles.h"
 
-using namespace std;
+namespace {
 
-// Konstanty
-constexpr const char* MASTER_QUERY = "SELECT account_id FROM players_all";
-constexpr int BATCH_SIZE = 100;
-constexpr int SAVE_THRESHOLD = 5000;
-constexpr size_t NUM_THREADS = 6; // Počet vlákien pre paralelizáciu (optimálne pre 8-jadrový server)
+constexpr const char* kMasterQuery = "SELECT account_id FROM players_all";
+constexpr int kDefaultBatchSize = 100;
+constexpr int kSaveThreshold = 5000;
+constexpr size_t kDefaultNumThreads = 6;
 
-// Typy
-using timestamp_t = unsigned long long;
-using wn8value = unordered_map<int, float>;
+using Wn8Values = std::unordered_map<int, float>;
 
-// Thread-safe fronta pre account_id
-class ThreadSafeQueue {
-private:
-    vector<int> data;
-    mutable mutex mtx;
-    size_t read_pos = 0;
-
-public:
-    void push_bulk(vector<int>&& ids) {
-        lock_guard<mutex> lock(mtx);
-        data = move(ids);
-        read_pos = 0;
-    }
-
-    bool get_batch(vector<int>& batch, size_t batch_size) {
-        lock_guard<mutex> lock(mtx);
-        if (read_pos >= data.size()) return false;
-
-        size_t end = min(read_pos + batch_size, data.size());
-        batch.clear();
-        batch.reserve(end - read_pos);
-        batch.insert(batch.end(), data.begin() + read_pos, data.begin() + end);
-        read_pos = end;
-        return true;
-    }
-
-    size_t size() const {
-        lock_guard<mutex> lock(mtx);
-        return data.size() - read_pos;
-    }
-
-    bool empty() const {
-        lock_guard<mutex> lock(mtx);
-        return read_pos >= data.size();
+struct PgResultDeleter {
+    void operator()(PGresult* result) const {
+        if (result != nullptr) {
+            PQclear(result);
+        }
     }
 };
 
-// Thread-safe buffer pre WN8 hodnoty
-class WN8Buffer {
-private:
-    wn8value data;
-    mutable mutex mtx;
+using PgResultPtr = std::unique_ptr<PGresult, PgResultDeleter>;
 
+class ThreadSafeQueue {
 public:
-    void insert(const wn8value& values) {
-        lock_guard<mutex> lock(mtx);
-        data.insert(values.begin(), values.end());
+    void PushBulk(std::vector<int>&& ids) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        data_ = std::move(ids);
+        read_pos_ = 0;
     }
 
-    size_t size() const {
-        lock_guard<mutex> lock(mtx);
-        return data.size();
+    bool GetBatch(std::vector<int>& batch, size_t batch_size) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (read_pos_ >= data_.size()) {
+            return false;
+        }
+
+        size_t end = std::min(read_pos_ + batch_size, data_.size());
+        batch.clear();
+        batch.reserve(end - read_pos_);
+        batch.insert(batch.end(), data_.begin() + read_pos_, data_.begin() + end);
+        read_pos_ = end;
+        return true;
     }
 
-    wn8value extract_all() {
-        lock_guard<mutex> lock(mtx);
-        wn8value result = move(data);
-        data.clear();
+    size_t Size() const {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return data_.size() - read_pos_;
+    }
+
+    bool Empty() const {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return read_pos_ >= data_.size();
+    }
+
+private:
+    std::vector<int> data_;
+    mutable std::mutex mtx_;
+    size_t read_pos_ = 0;
+};
+
+class WN8Buffer {
+public:
+    void Insert(const Wn8Values& values) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        data_.insert(values.begin(), values.end());
+    }
+
+    Wn8Values ExtractAll() {
+        std::lock_guard<std::mutex> lock(mtx_);
+        Wn8Values result = std::move(data_);
+        data_.clear();
         return result;
     }
 
-    wn8value extract_if_threshold(size_t threshold) {
-        lock_guard<mutex> lock(mtx);
-        if (data.size() >= threshold) {
-            wn8value result = move(data);
-            data.clear();
+    Wn8Values ExtractIfThreshold(size_t threshold) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (data_.size() >= threshold) {
+            Wn8Values result = std::move(data_);
+            data_.clear();
             return result;
         }
         return {};
     }
+
+private:
+    Wn8Values data_;
+    mutable std::mutex mtx_;
 };
 
-// Meranie času
-static timestamp_t get_timestamp() {
-    struct timeval now;
-    gettimeofday(&now, nullptr);
-    return now.tv_usec + static_cast<timestamp_t>(now.tv_sec) * 1000000;
-}
-
-// Získanie včerajšieho dátumu
-string GetYesterdayDate() {
-    time_t now = time(nullptr);
-    struct tm* tm_info = localtime(&now);
-
-    char buffer[11];
-    tm_info->tm_mday--;
-    mktime(tm_info); // Normalizácia dátumu
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm_info);
-
-    return string(buffer);
-}
-
-// WN8 Calculator - singleton s cached ETV tabuľkou
 class WN8Calculator {
 public:
     struct ETVData {
-        float frag, dmg, spot, def, win;
+        float frag;
+        float dmg;
+        float spot;
+        float def;
+        float win;
     };
 
-    static WN8Calculator& getInstance() {
+    static WN8Calculator& GetInstance() {
         static WN8Calculator instance;
         return instance;
     }
 
-    float calculate(const wn_data& player_data, const vehicle_battles& tank_data) const {
+    float Calculate(const wn_data& player_data, const vehicle_battles& tank_data) const {
         double expDMG = 0.0, expSpot = 0.0, expFrag = 0.0, expDef = 0.0, expWin = 0.0;
 
         for (const auto& [tank_id, battles] : tank_data) {
-            auto it = etv_table.find(tank_id);
-            if (it == etv_table.end()) continue;
+            auto it = etv_table_.find(tank_id);
+            if (it == etv_table_.end()) {
+                continue;
+            }
 
             const ETVData& etv = it->second;
             double b = static_cast<double>(battles);
@@ -149,7 +140,9 @@ public:
             expWin  += 0.01 * etv.win * b;
         }
 
-        if (expDMG == 0.0) return 0.0f;
+        if (expDMG == 0.0) {
+            return 0.0f;
+        }
 
         double rDMG  = player_data.dmg   / expDMG;
         double rSpot = player_data.spot  / expSpot;
@@ -157,265 +150,371 @@ public:
         double rDef  = player_data.dcp   / expDef;
         double rWin  = player_data.wins  / expWin;
 
-        double rDMGc  = max(0.0, (rDMG  - 0.22) / 0.78);
-        double rSpotc = max(0.0, min(rDMGc + 0.1, (rSpot - 0.38) / 0.62));
-        double rFragc = max(0.0, min(rDMGc + 0.2, (rFrag - 0.12) / 0.88));
-        double rDefc  = max(0.0, min(rDMGc + 0.1, (rDef  - 0.10) / 0.90));
-        double rWinc  = max(0.0, (rWin  - 0.71) / 0.29);
+        double rDMGc  = std::max(0.0, (rDMG  - 0.22) / 0.78);
+        double rSpotc = std::max(0.0, std::min(rDMGc + 0.1, (rSpot - 0.38) / 0.62));
+        double rFragc = std::max(0.0, std::min(rDMGc + 0.2, (rFrag - 0.12) / 0.88));
+        double rDefc  = std::max(0.0, std::min(rDMGc + 0.1, (rDef  - 0.10) / 0.90));
+        double rWinc  = std::max(0.0, (rWin  - 0.71) / 0.29);
 
         return static_cast<float>(
             980.0 * rDMGc +
             210.0 * rDMGc * rFragc +
             155.0 * rFragc * rSpotc +
             75.0  * rDefc * rFragc +
-            145.0 * min(1.8, rWinc)
+            145.0 * std::min(1.8, rWinc)
         );
     }
 
 private:
-    unordered_map<int, ETVData> etv_table;
+    std::unordered_map<int, ETVData> etv_table_;
 
     WN8Calculator() {
-        load_etv_table();
+        LoadEtvTable();
     }
 
-    void load_etv_table() {
+    void LoadEtvTable() {
         Pgsql pgsql;
         PGconn* conn = pgsql.Get();
         if (!conn) {
-            cerr << "Failed to connect to database for ETV table" << endl;
+            std::cerr << "Failed to connect to database for ETV table" << std::endl;
             return;
         }
 
-        PGresult* result = PQexec(conn, "SELECT * FROM expected_tank_value");
-        if (PQresultStatus(result) != PGRES_TUPLES_OK) {
-            cerr << "Error loading ETV table: " << PQresultErrorMessage(result) << endl;
-            PQclear(result);
+        PgResultPtr result(PQexec(conn, "SELECT * FROM expected_tank_value"));
+        if (result == nullptr || PQresultStatus(result.get()) != PGRES_TUPLES_OK) {
+            std::cerr << "Error loading ETV table: " << PQresultErrorMessage(result.get()) << std::endl;
             return;
         }
 
-        int ntuples = PQntuples(result);
-        etv_table.reserve(ntuples);
+        int ntuples = PQntuples(result.get());
+        etv_table_.reserve(static_cast<size_t>(ntuples));
 
         for (int i = 0; i < ntuples; i++) {
-            int tank_id = stoi(PQgetvalue(result, i, 0));
+            int tank_id = std::stoi(PQgetvalue(result.get(), i, 0));
             ETVData data{
-                stof(PQgetvalue(result, i, 1)),  // frag
-                stof(PQgetvalue(result, i, 2)),  // dmg
-                stof(PQgetvalue(result, i, 3)),  // spot
-                stof(PQgetvalue(result, i, 4)),  // def
-                stof(PQgetvalue(result, i, 5))   // win
+                std::stof(PQgetvalue(result.get(), i, 1)),
+                std::stof(PQgetvalue(result.get(), i, 2)),
+                std::stof(PQgetvalue(result.get(), i, 3)),
+                std::stof(PQgetvalue(result.get(), i, 4)),
+                std::stof(PQgetvalue(result.get(), i, 5))
             };
-            etv_table[tank_id] = data;
+            etv_table_[tank_id] = data;
         }
 
-        PQclear(result);
-        // Destruktor Pgsql automaticky zavolá PQfinish
-
-        cout << "Loaded " << etv_table.size() << " entries from ETV table" << endl;
+        std::cout << "Loaded " << etv_table_.size() << " entries from ETV table" << std::endl;
     }
 
     WN8Calculator(const WN8Calculator&) = delete;
     WN8Calculator& operator=(const WN8Calculator&) = delete;
 };
 
-// Načítanie account_id z databázy
-vector<int> LoadAccountIds() {
+std::vector<int> LoadAccountIds(size_t limit) {
     Pgsql pgsql;
     PGconn* conn = pgsql.Get();
     if (!conn) {
-        cerr << "Failed to connect to database" << endl;
+        std::cerr << "Failed to connect to database" << std::endl;
         return {};
     }
 
-    PGresult* result = PQexec(conn, MASTER_QUERY);
-    if (PQresultStatus(result) != PGRES_TUPLES_OK) {
-        cerr << "Error in LoadAccountIds: " << PQresultErrorMessage(result) << endl;
-        PQclear(result);
+    std::string query = kMasterQuery;
+    if (limit > 0) {
+        query += " LIMIT " + std::to_string(limit);
+    }
+
+    PgResultPtr result(PQexec(conn, query.c_str()));
+    if (result == nullptr || PQresultStatus(result.get()) != PGRES_TUPLES_OK) {
+        std::cerr << "Error in LoadAccountIds: " << PQresultErrorMessage(result.get()) << std::endl;
         return {};
     }
 
-    int ntuples = PQntuples(result);
-    vector<int> ids;
-    ids.reserve(ntuples);
+    int ntuples = PQntuples(result.get());
+    std::vector<int> ids;
+    ids.reserve(static_cast<size_t>(ntuples));
 
     for (int i = 0; i < ntuples; i++) {
-        ids.push_back(stoi(PQgetvalue(result, i, 0)));
+        ids.push_back(std::stoi(PQgetvalue(result.get(), i, 0)));
     }
-
-    PQclear(result);
-    // Destruktor Pgsql automaticky zavolá PQfinish
 
     return ids;
 }
 
-// Vytvorenie ID stringu pre API
-string CreateIdString(const vector<int>& ids) {
-    if (ids.empty()) return "";
+std::string CreateIdString(const std::vector<int>& ids) {
+    if (ids.empty()) {
+        return "";
+    }
 
-    string result;
-    result.reserve(ids.size() * 10); // Priemerná dĺžka čísla
+    std::string result;
+    result.reserve(ids.size() * 10);
 
     for (size_t i = 0; i < ids.size(); i++) {
-        if (i > 0) result += ',';
-        result += to_string(ids[i]);
+        if (i > 0) {
+            result += ',';
+        }
+        result += std::to_string(ids[i]);
     }
 
     return result;
 }
 
-// Spočítanie WN8 pre batch hráčov
-wn8value CalculateWN8Batch(const PlayersStats& player_stats, const Data_vehicle& vehicles) {
-    wn8value results;
+Wn8Values CalculateWN8Batch(const PlayersStats& player_stats, const Data_vehicle& vehicles, int& missing_vehicles) {
+    Wn8Values results;
     results.reserve(player_stats.size());
 
-    const WN8Calculator& calculator = WN8Calculator::getInstance();
+    const WN8Calculator& calculator = WN8Calculator::GetInstance();
 
     for (const auto& [account_id, stats] : player_stats) {
         auto vehicle_it = vehicles.find(account_id);
-        if (vehicle_it == vehicles.end()) continue;
+        if (vehicle_it == vehicles.end()) {
+            ++missing_vehicles;
+            continue;
+        }
 
-        float wn8 = calculator.calculate(stats, vehicle_it->second);
+        float wn8 = calculator.Calculate(stats, vehicle_it->second);
         results[account_id] = wn8;
     }
 
     return results;
 }
 
-// Uloženie WN8 hodnôt do databázy
-void SaveWN8Values(const wn8value& wn8_values) {
-    if (wn8_values.empty()) return;
+void SaveWN8Values(const Wn8Values& wn8_values) {
+    if (wn8_values.empty()) {
+        return;
+    }
 
     Pgsql pgsql;
     PGconn* conn = pgsql.Get();
     if (!conn) {
-        cerr << "Failed to connect to database for saving" << endl;
+        std::cerr << "Failed to connect to database for saving" << std::endl;
         return;
     }
 
-    // DELETE query
-    string q_delete = "DELETE FROM wn8player WHERE account_id IN (";
+    if (!pgsql.BeginTransaction()) {
+        std::cerr << "Failed to begin transaction for saving" << std::endl;
+        return;
+    }
+
+    std::string q_delete = "DELETE FROM wn8player WHERE account_id IN (";
     q_delete.reserve(wn8_values.size() * 10 + 50);
 
     bool first = true;
     for (const auto& [account_id, _] : wn8_values) {
-        if (!first) q_delete += ',';
-        q_delete += to_string(account_id);
+        if (!first) {
+            q_delete += ',';
+        }
+        q_delete += std::to_string(account_id);
         first = false;
     }
     q_delete += ')';
 
-    PGresult* result = PQexec(conn, q_delete.c_str());
-    PQclear(result);
+    PgResultPtr result(PQexec(conn, q_delete.c_str()));
+    if (result == nullptr || PQresultStatus(result.get()) != PGRES_COMMAND_OK) {
+        std::cerr << "Delete failed: " << PQresultErrorMessage(result.get()) << std::endl;
+        pgsql.RollbackTransaction();
+        return;
+    }
 
-    // INSERT query - použitie batch insertu
-    string q_insert = "INSERT INTO wn8player (account_id, wn8) VALUES ";
+    std::string q_insert = "INSERT INTO wn8player (account_id, wn8) VALUES ";
     q_insert.reserve(wn8_values.size() * 25 + 50);
 
     first = true;
     for (const auto& [account_id, wn8] : wn8_values) {
-        if (!first) q_insert += ',';
-        q_insert += '(' + to_string(account_id) + ',' + to_string(wn8) + ')';
+        if (!first) {
+            q_insert += ',';
+        }
+        q_insert += '(' + std::to_string(account_id) + ',' + std::to_string(wn8) + ')';
         first = false;
     }
 
-    result = PQexec(conn, q_insert.c_str());
-    PQclear(result);
-    // Destruktor Pgsql automaticky zavolá PQfinish
+    result.reset(PQexec(conn, q_insert.c_str()));
+    if (result == nullptr || PQresultStatus(result.get()) != PGRES_COMMAND_OK) {
+        std::cerr << "Insert failed: " << PQresultErrorMessage(result.get()) << std::endl;
+        pgsql.RollbackTransaction();
+        return;
+    }
+
+    if (!pgsql.CommitTransaction()) {
+        std::cerr << "Commit failed for saving" << std::endl;
+        pgsql.RollbackTransaction();
+    }
 }
 
-// Worker thread funkcia
-void WorkerThread(ThreadSafeQueue& queue, WN8Buffer& wn8_buffer, atomic<int>& processed) {
+void WorkerThread(ThreadSafeQueue& queue, WN8Buffer& wn8_buffer, std::atomic<int>& processed,
+                  std::atomic<int>& missing_stats, std::atomic<int>& missing_vehicles, size_t batch_size) {
     GetPlayersStats player_stats_api;
     GetPlayersVehicles vehicles_api;
 
     while (true) {
-        vector<int> batch;
-        if (!queue.get_batch(batch, BATCH_SIZE)) {
-            break; // Koniec práce
+        std::vector<int> batch;
+        if (!queue.GetBatch(batch, batch_size)) {
+            break;
         }
 
-        string id_string = CreateIdString(batch);
-
+        std::string id_string = CreateIdString(batch);
         PlayersStats player_stats;
         Data_vehicle vehicles;
 
-        // Stiahnutie dát
         player_stats_api.Gets(id_string, &player_stats);
         vehicles_api.Gets(id_string, &vehicles);
 
-        // Výpočet WN8
-        wn8value wn8_results = CalculateWN8Batch(player_stats, vehicles);
+        int local_skipped = 0;
+        if (player_stats.size() < batch.size()) {
+            int diff = static_cast<int>(batch.size() - player_stats.size());
+            missing_stats.fetch_add(diff, std::memory_order_relaxed);
+        }
 
-        // Uloženie do bufferu
-        wn8_buffer.insert(wn8_results);
+        Wn8Values wn8_results = CalculateWN8Batch(player_stats, vehicles, local_skipped);
+        wn8_buffer.Insert(wn8_results);
 
-        processed.fetch_add(batch.size(), memory_order_relaxed);
+        processed.fetch_add(static_cast<int>(batch.size()), std::memory_order_relaxed);
+        missing_vehicles.fetch_add(local_skipped, std::memory_order_relaxed);
 
-        // Uloženie do DB ak je buffer dosť veľký
-        wn8value to_save = wn8_buffer.extract_if_threshold(SAVE_THRESHOLD);
+        Wn8Values to_save = wn8_buffer.ExtractIfThreshold(kSaveThreshold);
         if (!to_save.empty()) {
             SaveWN8Values(to_save);
-            cout << "Saved " << to_save.size() << " WN8 values (processed: "
-                 << processed.load() << ")" << endl;
+            std::cout << "Saved " << to_save.size() << " WN8 values (processed: "
+                      << processed.load() << ")" << std::endl;
         }
     }
 }
 
-int main() {
-    timestamp_t t_start = get_timestamp();
-    time_t start_time = time(nullptr);
-    cout << "\nProgram started: " << ctime(&start_time) << endl;
+class WN8Runner {
+public:
+    std::string Run() {
+        const size_t limit = ReadLimit();
+        const size_t num_threads = ReadNumThreads();
+        const size_t batch_size = ReadBatchSize();
 
-    // Načítanie account_id
-    vector<int> account_ids = LoadAccountIds();
-    cout << "Total players to process: " << account_ids.size() << endl;
+        auto start = std::chrono::high_resolution_clock::now();
+        std::time_t start_time = std::time(nullptr);
+        std::cout << "\nProgram started: " << std::ctime(&start_time) << std::endl;
 
-    if (account_ids.empty()) {
-        cout << "No players to process" << endl;
+        std::vector<int> account_ids = LoadAccountIds(limit);
+        std::cout << "Total players to process: " << account_ids.size() << std::endl;
+
+        if (account_ids.empty()) {
+            std::cout << "No players to process" << std::endl;
+            return "STATISTIKA SPRACOVANIA Typ=PlayersWN8v2 Kola=0 Cas=0.000s Klany=0 Hraci=0 Prichody=0 Odchody=0 NoveID=0 Nicky=0 Ukoncene=0 Updaty=0 Inserty=0 Spracovane=0 MissingStats=0 MissingVehicles=0 Neaktivne=0";
+        }
+
+        WN8Calculator::GetInstance();
+
+        ThreadSafeQueue queue;
+        queue.PushBulk(std::move(account_ids));
+
+        WN8Buffer wn8_buffer;
+        std::atomic<int> processed(0);
+        std::atomic<int> missing_stats(0);
+        std::atomic<int> missing_vehicles(0);
+
+        std::vector<std::thread> workers;
+        workers.reserve(num_threads);
+
+        std::cout << "Starting " << num_threads << " worker threads..." << std::endl;
+
+        for (size_t i = 0; i < num_threads; i++) {
+            workers.emplace_back(WorkerThread, std::ref(queue), std::ref(wn8_buffer), std::ref(processed),
+                                 std::ref(missing_stats), std::ref(missing_vehicles), batch_size);
+        }
+
+        for (auto& worker : workers) {
+            worker.join();
+        }
+
+        Wn8Values remaining = wn8_buffer.ExtractAll();
+        if (!remaining.empty()) {
+            SaveWN8Values(remaining);
+            std::cout << "Saved remaining " << remaining.size() << " WN8 values" << std::endl;
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::time_t end_time = std::time(nullptr);
+
+        std::cout << "\nTotal processed: " << processed.load() << " players" << std::endl;
+        std::cout << "Missing stats: " << missing_stats.load() << std::endl;
+        std::cout << "Missing vehicles: " << missing_vehicles.load() << std::endl;
+        std::cout << "Time elapsed: " << elapsed.count() << " seconds" << std::endl;
+        std::cout << "Program finished: " << std::ctime(&end_time) << std::endl;
+
+        std::ostringstream info;
+        info << std::fixed << std::setprecision(3);
+        info << "STATISTIKA SPRACOVANIA "
+             << "Typ=PlayersWN8v2"
+             << " Kola=0"
+             << " Cas=" << elapsed.count() << "s"
+             << " Klany=0"
+             << " Hraci=" << processed.load()
+             << " Prichody=0"
+             << " Odchody=0"
+             << " NoveID=0"
+             << " Nicky=0"
+             << " Ukoncene=0"
+             << " Updaty=0"
+             << " Inserty=0"
+             << " Spracovane=" << processed.load()
+             << " MissingStats=" << missing_stats.load()
+             << " MissingVehicles=" << missing_vehicles.load()
+             << " Neaktivne=0";
+        return info.str();
+    }
+
+private:
+    size_t ReadNumThreads() const {
+        if (const char* value = std::getenv("WN8_THREADS")) {
+            try {
+                size_t parsed = static_cast<size_t>(std::stoul(value));
+                return parsed > 0 ? parsed : kDefaultNumThreads;
+            }
+            catch (...) {
+                std::cerr << "Neplatna hodnota WN8_THREADS, pouzivam default." << std::endl;
+            }
+        }
+        return kDefaultNumThreads;
+    }
+
+    size_t ReadBatchSize() const {
+        if (const char* value = std::getenv("WN8_BATCH_SIZE")) {
+            try {
+                size_t parsed = static_cast<size_t>(std::stoul(value));
+                return parsed > 0 ? parsed : static_cast<size_t>(kDefaultBatchSize);
+            }
+            catch (...) {
+                std::cerr << "Neplatna hodnota WN8_BATCH_SIZE, pouzivam default." << std::endl;
+            }
+        }
+        return static_cast<size_t>(kDefaultBatchSize);
+    }
+
+    size_t ReadLimit() const {
+        if (const char* value = std::getenv("WN8_LIMIT")) {
+            try {
+                return static_cast<size_t>(std::stoul(value));
+            }
+            catch (...) {
+                std::cerr << "Neplatna hodnota WN8_LIMIT, ignorujem." << std::endl;
+            }
+        }
         return 0;
     }
+};
 
-    // Inicializácia WN8 kalkulátora (načíta ETV tabuľku)
-    WN8Calculator::getInstance();
+} // namespace
 
-    // Thread-safe štruktúry
-    ThreadSafeQueue queue;
-    queue.push_bulk(move(account_ids));
-
-    WN8Buffer wn8_buffer;
-    atomic<int> processed(0);
-
-    // Spustenie worker threads
-    vector<thread> workers;
-    workers.reserve(NUM_THREADS);
-
-    cout << "Starting " << NUM_THREADS << " worker threads..." << endl;
-
-    for (size_t i = 0; i < NUM_THREADS; i++) {
-        workers.emplace_back(WorkerThread, ref(queue), ref(wn8_buffer), ref(processed));
+int main() {
+    CronLog::ScopedRun cron_log("cplusplus:PlayersWN8v2");
+    try {
+        WN8Runner runner;
+        cron_log.SetInfo(runner.Run());
+        return 0;
     }
-
-    // Čakanie na dokončenie
-    for (auto& worker : workers) {
-        worker.join();
+    catch (const std::exception& e) {
+        cron_log.SetInfo(std::string("ERROR: ") + e.what());
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
     }
-
-    // Uloženie zostávajúcich hodnôt
-    wn8value remaining = wn8_buffer.extract_all();
-    if (!remaining.empty()) {
-        SaveWN8Values(remaining);
-        cout << "Saved remaining " << remaining.size() << " WN8 values" << endl;
+    catch (...) {
+        cron_log.SetInfo("ERROR: unknown exception");
+        std::cerr << "Fatal error: unknown exception" << std::endl;
+        return 1;
     }
-
-    // Výpis času
-    timestamp_t t_end = get_timestamp();
-    double seconds = (t_end - t_start) / 1000000.0;
-    time_t end_time = time(nullptr);
-
-    cout << "\nTotal processed: " << processed.load() << " players" << endl;
-    cout << "Time elapsed: " << seconds << " seconds" << endl;
-    cout << "Program finished: " << ctime(&end_time) << endl;
-
-    return 0;
 }

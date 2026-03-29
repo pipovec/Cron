@@ -101,7 +101,6 @@ string SendCurl::SendWOT(string method, string post)
     using namespace std;
 
     string data;
-    string error = "Json parse error";
     // Treba premenit string na char
     string tmp_url = server_wot + method;
     const char *url = tmp_url.c_str();
@@ -109,30 +108,42 @@ string SendCurl::SendWOT(string method, string post)
     string tmp_post = api_id + post;
     const char *postdata = tmp_post.c_str();
 
-    data = this->SendRequest(url, postdata);
+    while (true)
+    {
+        data = this->SendRequest(url, postdata);
+
+        using json = nlohmann::json;
+        json js;
+
+        try
+        {
+            js = json::parse(data);
+        }
+        catch (json::parse_error &e)
+        {
+            cout << "SendWOT parse error: " << e.what() << endl;
+            cout << "Cakam 60 sekund a skusim znova..." << endl;
+            this_thread::sleep_for(chrono::seconds(60));
+            continue;
+        }
+
+        string status = js.value("status", "ok");
+
+        if (status == "error")
+        {
+            cout << "API chyba: " << js << endl;
+            cout << "Cakam 60 sekund a skusim znova..." << endl;
+            js.clear();
+            this_thread::sleep_for(chrono::seconds(60));
+            continue;
+        }
+
+        js.clear();
+        break;
+    }
 
     tmp_post.clear();
     tmp_url.clear();
-
-    using json = nlohmann::json;
-    json js;
-    
-    js = json::parse(data);
-    string status;
-    status = js["status"];
-
-    if (status == "error")
-    {
-        cout << "Chyba! :" << js << endl;
-        if (status.compare("ok") != 0)
-        {
-            //string fail = js["error"]["field"].get<string>() + ", " + js["error"]["message"].get<string>() + ": " + js["error"]["value"].get<string>();
-            throw error;
-        }
-    }
-
-    js.clear();
-    status.clear();
 
     return data;
 }

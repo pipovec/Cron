@@ -18,7 +18,10 @@
 #include <ctime>
 #include <thread>
 #include <memory>
+#include <iomanip>
+#include <sstream>
 #include "./lib/Pgsql.h"
+#include "./lib/CronLog.h"
 #include "./lib/QueryBuilder.h"
 #include "./lib/PlayerProcessor.h"
 
@@ -41,8 +44,11 @@ void PrintUsage(const char* programName)
 
 int main(int argc, char* argv[])
 {
+    CronLog::ScopedRun cron_log("cplusplus:Players");
+
     // Kontrola parametrov
     if (argc != 2) {
+        cron_log.SetInfo("ERROR: invalid argc");
         std::cerr << "Chyba: Nespravny pocet parametrov!" << std::endl << std::endl;
         PrintUsage(argv[0]);
         return 1;
@@ -56,6 +62,7 @@ int main(int argc, char* argv[])
         queryBuilder = std::make_unique<QueryBuilder>(processType);
     }
     catch (const std::invalid_argument& e) {
+        cron_log.SetInfo("ERROR: invalid process type");
         std::cerr << "Chyba: " << e.what() << std::endl << std::endl;
         PrintUsage(argv[0]);
         return 1;
@@ -69,6 +76,7 @@ int main(int argc, char* argv[])
     PGconn* permanent_connection = pg->Get();
 
     if (permanent_connection == nullptr || PQstatus(permanent_connection) != CONNECTION_OK) {
+        cron_log.SetInfo("ERROR: db connect failed");
         std::cerr << "Chyba: Nepodarilo sa pripojit k databaze!" << std::endl;
         return 1;
     }
@@ -127,5 +135,25 @@ int main(int argc, char* argv[])
     std::cout << std::endl;
     stat.Print();
 
+    std::ostringstream info;
+    info << std::fixed << std::setprecision(3);
+    info << "STATISTIKA SPRACOVANIA "
+         << "Typ=" << processType
+         << " Kola=" << kolo
+         << " Cas=" << elapsed_seconds.count() << "s"
+         << " Klany=" << stat.clans_processed
+         << " Hraci=" << stat.players_checked
+         << " Prichody=" << stat.new_players_all
+         << " Odchody=" << stat.players_left
+         << " NoveID=" << stat.new_account_id
+         << " Nicky=" << stat.change_nick
+         << " Ukoncene=" << stat.empty_clan
+         << " Updaty=0"
+         << " Inserty=0"
+         << " Spracovane=" << stat.players_checked
+         << " MissingStats=0"
+         << " MissingVehicles=0"
+         << " Neaktivne=0";
+    cron_log.SetInfo(info.str());
     return 0;
 }

@@ -234,6 +234,51 @@ Pre zmenu DB pripojenia upravte tento riadok.
 
 (TODO: Dokumentácia pre SendCurl)
 
+## CronLog - Logovanie behov cronov
+
+`CronLog` je jednoduchá `header-only` vrstva nad `Pgsql`, ktorá zapisuje beh cronu do tabuľky:
+`cron_log(start_time, end_time, name, info)`.
+
+Súbor: `lib/CronLog.h`
+
+### Odporúčané použitie (RAII)
+
+```cpp
+#include "./lib/CronLog.h"
+
+int main() {
+    CronLog::ScopedRun run("PlayersInfo2");
+
+    // ... logika cronu ...
+
+    run.SetInfo("OK: processed=1250");
+    return 0; // v destruktore sa ulozi start/end/name/info
+}
+```
+
+### Explicitné použitie
+
+```cpp
+#include "./lib/CronLog.h"
+
+int main() {
+    std::time_t start = std::time(nullptr);
+
+    // ... logika cronu ...
+
+    std::time_t end = std::time(nullptr);
+    CronLog::Writer writer;
+    writer.Insert(start, end, "PlayersInfo2", "OK");
+    return 0;
+}
+```
+
+### Poznámky
+
+- `name` a `info` sú automaticky skrátené na 255 znakov (kvôli `varchar(255)`).
+- Ak neprenesieš `Pgsql*`, knižnica si vytvorí vlastné DB spojenie.
+- Pri chybe insertu metóda vráti `false` a vypíše chybový výstup na `stderr`.
+
 ## Kompilácia knižníc
 
 Knižnice sa kompilujú automaticky pomocou makefile:

@@ -3,7 +3,8 @@
 # Compiler a flagy
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O3 -march=native -flto
-CXXFLAGS += -I/usr/include/postgresql -fPIC
+JSON_INCLUDE := ./json/include
+CXXFLAGS += -I/usr/include/postgresql -I$(JSON_INCLUDE) -fPIC
 
 # Linker flagy
 LDFLAGS := -L/usr/lib/x86_64-linux-gnu

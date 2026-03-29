@@ -93,166 +93,212 @@
 *
 *   Autor: Boris Fekár (pipovec, BobyOneKiller)
 *   Optimalizácia: 2025-11-15
+*   Refactor: 2026-02-28
 *   Dokumentácia: ./KontrolaKlanov/README.md
 *
 */
 
-#include <iostream>
-#include <vector>
 #include <chrono>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <sstream>
 #include <thread>
+#include <vector>
 
-/** Moje kniznice */
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
+#include "./lib/CronLog.h"
 #include "./lib/KontrolaKlanov/ClanData.h"
 #include "./lib/KontrolaKlanov/ClanProcessor.h"
+#include "./json/src/json.hpp"
 
-using namespace std;
+namespace {
 
-const string field = "&fields=clan_id,tag,created_at,name,members_count,emblems";
-const string method = "/clans/list/";
+const std::string kField = "&fields=clan_id,tag,created_at,name,members_count,emblems";
+const std::string kMethod = "/clans/list/";
+constexpr int kApiRateLimitMs = 70; // ~14.3 req/s
+constexpr int kMaxRetries = 3;
 
-// API rate limiting: max 15 requestov/sekundu = 1 request kazde 67ms
-const int API_RATE_LIMIT_MS = 70; // 70ms medzi requestmi = ~14.3 req/s
-
-/** Spojenie do databazy */
-Pgsql* p = new Pgsql;
-
-int page = 1;
-int total_page = 2;
-
-/** Ziskanie dat zo servera s rate limitingom */
-string GetDataFromServer(int page, chrono::steady_clock::time_point& last_request_time) {
-    int retry_count = 0;
-    const int MAX_RETRIES = 3;
-
-    // API rate limiting - pockaj aby sme dodrzali limit
-    auto now = chrono::steady_clock::now();
-    auto time_since_last = chrono::duration_cast<chrono::milliseconds>(now - last_request_time).count();
-
-    if(time_since_last < API_RATE_LIMIT_MS) {
-        int wait_time = API_RATE_LIMIT_MS - time_since_last;
-        this_thread::sleep_for(chrono::milliseconds(wait_time));
+class ClanSyncRunner {
+public:
+    ClanSyncRunner()
+        : db_(std::make_unique<Pgsql>()),
+          processor_(db_.get())
+    {
     }
 
-    chrono::seconds dura(3);
-    string post_data = field + "&page_no=" + to_string(page);
-    string json_string;
+    int Run() {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        auto last_request_time = std::chrono::steady_clock::now();
 
-    SendCurl send;
+        std::cout << "*********************************" << std::endl;
+        std::cout << "Program KontrolaKlanov" << std::endl;
+        std::cout << "API Rate Limit: max 15 req/s" << std::endl;
+        std::cout << "*********************************" << std::endl;
 
-    do {
-        try {
-            json_string = send.SendWGN(method, post_data);
-            last_request_time = chrono::steady_clock::now(); // Update last request time
-            return json_string;
+        std::cout << std::endl << "Nacitavam existujuce klany z databazy..." << std::endl;
+        processor_.LoadExistingClans();
+
+        std::cout << std::endl << "Zacinam stahovanie dat zo servera..." << std::endl;
+
+        int page = 1;
+        std::string json_string = GetDataFromServer(page, last_request_time);
+        int total_page = GetTotalPages(json_string);
+
+        ProcessPage(page, total_page, json_string);
+        ++page;
+
+        while (page <= total_page) {
+            json_string = GetDataFromServer(page, last_request_time);
+            ProcessPage(page, total_page, json_string);
+            ++page;
         }
-        catch(exception& e) {
-            retry_count++;
-            cout << "Chyba v ziskani dat zo servera (pokus " << retry_count << "): " << e.what() << endl;
 
-            if(retry_count >= MAX_RETRIES) {
-                throw runtime_error("Nepodarilo sa ziskat data po " + to_string(MAX_RETRIES) + " pokusoch");
+        std::cout << std::endl << "Ukladam posledne zmeny..." << std::endl;
+        processor_.FlushBatches();
+
+        std::cout << std::endl << "Kontrolujem neaktivne/rozpustene klany..." << std::endl;
+        int inactive_count = processor_.GetInactiveClansCount();
+        if (inactive_count > 0) {
+            std::cout << "Najdenych " << inactive_count << " neaktivnych klanov" << std::endl;
+            processor_.MarkInactiveClans();
+        } else {
+            std::cout << "Ziadne neaktivne klany" << std::endl;
+        }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+
+        std::cout << std::endl << "*********************************" << std::endl;
+        std::cout << "Program uspesne dokonceny" << std::endl;
+        std::cout << "Celkovy cas: " << duration.count() << " sekund" << std::endl;
+        std::cout << "*********************************" << std::endl;
+
+        std::ostringstream info;
+        info << "STATISTIKA SPRACOVANIA "
+             << "Typ=KontrolaKlanov"
+             << " Kola=" << total_page
+             << " Cas=" << duration.count() << "s"
+             << " Klany=" << processed_clans_count_
+             << " Hraci=0"
+             << " Prichody=0"
+             << " Odchody=0"
+             << " NoveID=0"
+             << " Nicky=0"
+             << " Ukoncene=0"
+             << " Updaty=0"
+             << " Inserty=0"
+             << " Spracovane=" << processed_clans_count_
+             << " MissingStats=0"
+             << " MissingVehicles=0"
+             << " Neaktivne=" << inactive_count;
+        run_summary_ = info.str();
+
+        return 0;
+    }
+
+    const std::string& GetRunSummary() const {
+        return run_summary_;
+    }
+
+private:
+    std::string GetDataFromServer(int page, std::chrono::steady_clock::time_point& last_request_time) {
+        auto now = std::chrono::steady_clock::now();
+        auto time_since_last = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_request_time).count();
+
+        if (time_since_last < kApiRateLimitMs) {
+            int wait_time = kApiRateLimitMs - static_cast<int>(time_since_last);
+            std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
+        }
+
+        std::string post_data = kField + "&page_no=" + std::to_string(page);
+        std::string json_string;
+
+        for (int attempt = 1; attempt <= kMaxRetries; ++attempt) {
+            try {
+                json_string = curl_.SendWGN(kMethod, post_data);
+                last_request_time = std::chrono::steady_clock::now();
+                return json_string;
             }
+            catch (const std::exception& e) {
+                std::cout << "Chyba v ziskani dat zo servera (pokus " << attempt
+                          << "): " << e.what() << std::endl;
 
-            this_thread::sleep_for(dura);
+                if (attempt >= kMaxRetries) {
+                    throw std::runtime_error("Nepodarilo sa ziskat data po " +
+                                             std::to_string(kMaxRetries) + " pokusoch");
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            }
+            catch (...) {
+                std::cout << "Chyba v ziskani dat zo servera (pokus " << attempt
+                          << "): neznamy error" << std::endl;
+
+                if (attempt >= kMaxRetries) {
+                    throw std::runtime_error("Nepodarilo sa ziskat data po " +
+                                             std::to_string(kMaxRetries) + " pokusoch");
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            }
         }
-    } while(retry_count < MAX_RETRIES);
 
-    return "";
-}
+        return {};
+    }
 
-int GetTotalPages(const string& json_string) {
-    using json = nlohmann::json;
-    json js = json::parse(json_string);
+    int GetTotalPages(const std::string& json_string) const {
+        using json = nlohmann::json;
+        json js = json::parse(json_string);
 
-    int total = js["meta"]["total"].get<int>();
-    int pages = (total / 100) + 1;
+        int total = js["meta"]["total"].get<int>();
+        int pages = (total / 100) + 1;
 
-    cout << "Celkovy pocet klanov: " << total << endl;
-    cout << "Celkovy pocet stran: " << pages << endl;
+        std::cout << "Celkovy pocet klanov: " << total << std::endl;
+        std::cout << "Celkovy pocet stran: " << pages << std::endl;
 
-    return pages;
-}
+        return pages;
+    }
+
+    void ProcessPage(int page, int total_page, const std::string& json_string) {
+        std::vector<ClanData> clans;
+        processor_.ProcessJsonData(json_string, clans);
+        processed_clans_count_ += static_cast<int>(clans.size());
+
+        std::cout << "Spracovavam stranku " << page << "/" << total_page
+                  << " (" << clans.size() << " klanov)" << std::endl;
+
+        for (const auto& clan : clans) {
+            processor_.ProcessClan(clan);
+        }
+    }
+
+    std::unique_ptr<Pgsql> db_;
+    ClanProcessor processor_;
+    SendCurl curl_;
+    std::string run_summary_ = "STATISTIKA SPRACOVANIA Typ=KontrolaKlanov";
+    int processed_clans_count_ = 0;
+};
+
+} // namespace
 
 int main() {
-    auto start_time = chrono::high_resolution_clock::now();
-    auto last_request_time = chrono::steady_clock::now();
-
-    cout << "*********************************" << endl;
-    cout << "Program KontrolaKlanov" << endl;
-    cout << "API Rate Limit: max 15 req/s" << endl;
-    cout << "*********************************" << endl;
-
-    // Vytvor procesor klanov
-    ClanProcessor processor(p);
-
-    cout << endl << "Nacitavam existujuce klany z databazy..." << endl;
-    processor.LoadExistingClans();
-
-    cout << endl << "Zacinam stahovanie dat zo servera..." << endl;
-
-    // Ziskaj prvu stranku a zisti celkovy pocet stran
-    string json_string = GetDataFromServer(page, last_request_time);
-    total_page = GetTotalPages(json_string);
-
-    // Spracuj prvu stranku
-    vector<ClanData> clans;
-    processor.ProcessJsonData(json_string, clans);
-
-    cout << "Spracovavam stranku 1/" << total_page << " (" << clans.size() << " klanov)" << endl;
-
-    for(const auto& clan : clans) {
-        processor.ProcessClan(clan);
-    }
-
-    page++;
-
-    // Spracuj ostatne stranky
-    while(page <= total_page) {
-        clans.clear();
-
-        // Ziskaj data zo servera s rate limitingom
-        json_string = GetDataFromServer(page, last_request_time);
-
-        // Parsuj JSON
-        processor.ProcessJsonData(json_string, clans);
-
-        cout << "Spracovavam stranku " << page << "/" << total_page
-             << " (" << clans.size() << " klanov)" << endl;
-
-        // Spracuj klany
-        for(const auto& clan : clans) {
-            processor.ProcessClan(clan);
+    CronLog::ScopedRun cron_log("cplusplus:KontrolaKlanov");
+    try {
+        ClanSyncRunner runner;
+        const int rc = runner.Run();
+        if (rc == 0) {
+            cron_log.SetInfo(runner.GetRunSummary());
+        } else {
+            cron_log.SetInfo("ERROR: runner failed");
         }
-
-        page++;
+        return rc;
     }
-
-    // Flush zostatok
-    cout << endl << "Ukladam posledne zmeny..." << endl;
-    processor.FlushBatches();
-
-    // Oznac neaktivne klany (2 typy)
-    cout << endl << "Kontrolujem neaktivne/rozpustene klany..." << endl;
-    int inactive_count = processor.GetInactiveClansCount();
-    if(inactive_count > 0) {
-        cout << "Najdenych " << inactive_count << " neaktivnych klanov" << endl;
-        processor.MarkInactiveClans();
-    } else {
-        cout << "Ziadne neaktivne klany" << endl;
+    catch (const std::exception& e) {
+        cron_log.SetInfo(std::string("ERROR: ") + e.what());
+        std::cerr << "Fatal error: " << e.what() << std::endl;
+        return 1;
     }
-
-    auto end_time = chrono::high_resolution_clock::now();
-    auto duration = chrono::duration_cast<chrono::seconds>(end_time - start_time);
-
-    cout << endl << "*********************************" << endl;
-    cout << "Program uspesne dokonceny" << endl;
-    cout << "Celkovy cas: " << duration.count() << " sekund" << endl;
-    cout << "*********************************" << endl;
-
-    delete p;
-
-    return 0;
 }

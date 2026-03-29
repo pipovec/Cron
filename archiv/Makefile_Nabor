@@ -13,6 +13,7 @@ LIBDIR = lib/nabor
 
 # Zdrojove subory (triedy specificke pre Nabor.cpp)
 SOURCES = Nabor.cpp \
+          lib/Pgsql.cpp \
           $(LIBDIR)/DatabaseManager.cpp \
           $(LIBDIR)/BatchProcessor.cpp \
           $(LIBDIR)/PlayerDataCollector.cpp

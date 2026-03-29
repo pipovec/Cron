@@ -40,7 +40,7 @@ void GetPlayersStats::Gets(string account_ids, PlayersStats *playerStat)
 
     wn_data data;
 
-    for (auto& x : json::iterator_wrapper(udaje))
+    for (auto& x : udaje.items())
         {
             int account_id;       
             int battles,dcp,dmg,frags,spot,wins;

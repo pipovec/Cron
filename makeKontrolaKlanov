@@ -6,7 +6,8 @@
 
 # Compiler a flagy
 CXX := g++
-CPPFLAGS := --std=c++17 -Wall -Wextra -O3 -I/usr/include/postgresql
+JSON_INCLUDE := ./json/include
+CPPFLAGS := --std=c++17 -Wall -Wextra -O3 -I/usr/include/postgresql -I$(JSON_INCLUDE)
 LIBFLAGS := -L/usr/lib/x86_64-linux-gnu -lcurl -lpq -lpthread
 
 # Farby pre output

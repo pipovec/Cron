@@ -49,6 +49,9 @@
 #include <iostream>
 #include <sys/time.h>
 #include <vector>
+#include <iomanip>
+#include <sstream>
+#include "./lib/CronLog.h"
 #include "./lib/nabor/DatabaseManager.h"
 #include "./lib/nabor/BatchProcessor.h"
 #include "./lib/nabor/PlayerDataCollector.h"
@@ -165,6 +168,8 @@ bool savePlayersToDB(DatabaseManager* dbManager, BatchProcessor* batchProcessor,
 
 int main()
 {
+    CronLog::ScopedRun cron_log("cplusplus:Nabor");
+
     timestamp_t t0 = get_timestamp();
     time_t start, stop;
 
@@ -188,6 +193,7 @@ int main()
         vector<PlayerData> players = collector.collectAllPlayerData();
 
         if (players.empty()) {
+            cron_log.SetInfo("ERROR: no players");
             cout << "Ziadni hraci na spracovanie" << endl;
             return 1;
         }
@@ -195,6 +201,7 @@ int main()
         // FAZA 3: Ulozenie dat pomocou batch insert
         cout << "\n[3/5] Ukladam data do databazy..." << endl;
         if (!savePlayersToDB(&dbManager, &batchProcessor, players)) {
+            cron_log.SetInfo("ERROR: savePlayersToDB failed");
             cerr << "Chyba pri ukladani dat" << endl;
             return 1;
         }
@@ -221,7 +228,29 @@ int main()
         cout << "Celkovy cas: " << secs << " sekund" << endl;
         cout << "========================================" << endl;
 
+        std::ostringstream info;
+        info << std::fixed << std::setprecision(3);
+        info << "STATISTIKA SPRACOVANIA "
+             << "Typ=Nabor"
+             << " Kola=5"
+             << " Cas=" << secs << "s"
+             << " Klany=0"
+             << " Hraci=" << players.size()
+             << " Prichody=0"
+             << " Odchody=0"
+             << " NoveID=0"
+             << " Nicky=0"
+             << " Ukoncene=0"
+             << " Updaty=0"
+             << " Inserty=0"
+             << " Spracovane=" << players.size()
+             << " MissingStats=0"
+             << " MissingVehicles=0"
+             << " Neaktivne=0";
+        cron_log.SetInfo(info.str());
+
     } catch (const exception& e) {
+        cron_log.SetInfo(string("ERROR: ") + e.what());
         cerr << "CHYBA: " << e.what() << endl;
         return 1;
     }

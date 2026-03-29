@@ -7,8 +7,12 @@ Pgsql::Pgsql() : connected(false), pgsql(nullptr)
 {
     conninfo = DbConfig::LoadConninfo(
         DbConfig::GetConfigPath(),
-        "host=/var/run/postgresql port=5433 dbname=clan user=deamon password=sedemtri"
+        ""
     );
+    if (conninfo.empty()) {
+        std::cerr << "Chyba: DB konfiguracia je prazdna. Skontroluj .env alebo DB_CONFIG_PATH." << std::endl;
+        return;
+    }
     this->pgsql = this->Connect();
 }
 

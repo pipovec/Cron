@@ -41,7 +41,7 @@ void GetPlayersVehicles::Gets(string account_ids, Data_vehicle *p_vehicles)
     
     int account_id;
 
-    for (auto& x : json::iterator_wrapper(udaje))
+    for (auto& x : udaje.items())
     {
         vehicle_battles data;
         
@@ -59,7 +59,7 @@ void GetPlayersVehicles::Gets(string account_ids, Data_vehicle *p_vehicles)
                             
             if( !j.is_null() )
             {   
-                for(auto& y : json::iterator_wrapper(j))
+                for (auto& y : j.items())
                 {
                     auto v = y.value();
                     //cout << v["tank_id"]  <<" - " << v["statistics"]["battles"] << endl;
