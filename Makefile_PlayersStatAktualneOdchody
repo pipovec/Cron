@@ -20,17 +20,20 @@ TARGET = $(BINDIR)/PlayersStatAktualneOdchody
 
 MAIN_SRC = PlayersStatAktualneOdchody.cpp
 LIB_SRCS = $(LIBDIR)/Pgsql.cpp \
-           $(LIBDIR)/SendCurl.cpp
+           $(LIBDIR)/SendCurl.cpp \
+           $(LIBDIR)/PlayerStatProcessor.cpp
 
 MAIN_OBJ = $(OBJDIR)/PlayersStatAktualneOdchody.o
 LIB_OBJS = $(OBJDIR)/Pgsql.o \
-           $(OBJDIR)/SendCurl.o
+           $(OBJDIR)/SendCurl.o \
+           $(OBJDIR)/PlayerStatProcessor.o
 
 OBJS = $(MAIN_OBJ) $(LIB_OBJS)
 
 HEADERS = $(LIBDIR)/Pgsql.h \
           $(LIBDIR)/SendCurl.h \
-          $(LIBDIR)/CronLog.h
+          $(LIBDIR)/CronLog.h \
+          $(LIBDIR)/PlayerStatProcessor.h
 
 all: $(TARGET)
 
@@ -48,6 +51,10 @@ $(OBJDIR)/Pgsql.o: $(LIBDIR)/Pgsql.cpp $(LIBDIR)/Pgsql.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/SendCurl.o: $(LIBDIR)/SendCurl.cpp $(LIBDIR)/SendCurl.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/PlayerStatProcessor.o: $(LIBDIR)/PlayerStatProcessor.cpp $(LIBDIR)/PlayerStatProcessor.h
 	@echo "Kompilujem: $<"
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 

@@ -1,0 +1,69 @@
+#
+# Makefile pre PlayersStatAll
+#
+# Kompilacia: make -f Makefile_PlayersStatAll
+# Spustenie: ./bin/PlayersStatAll
+#
+
+CXX = g++
+JSON_INCLUDE = ./json/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I. -I/usr/include/postgresql -I$(JSON_INCLUDE)
+LDFLAGS = -lpq -lcurl
+
+OBJDIR = obj
+BINDIR = bin
+LIBDIR = lib
+
+$(shell mkdir -p $(OBJDIR) $(BINDIR))
+
+TARGET = $(BINDIR)/PlayersStatAll
+
+MAIN_SRC = PlayersStatAll.cpp
+LIB_SRCS = $(LIBDIR)/Pgsql.cpp \
+           $(LIBDIR)/SendCurl.cpp \
+           $(LIBDIR)/PlayerStatProcessor.cpp
+
+MAIN_OBJ = $(OBJDIR)/PlayersStatAll.o
+LIB_OBJS = $(OBJDIR)/Pgsql.o \
+           $(OBJDIR)/SendCurl.o \
+           $(OBJDIR)/PlayerStatProcessor.o
+
+OBJS = $(MAIN_OBJ) $(LIB_OBJS)
+
+HEADERS = $(LIBDIR)/Pgsql.h \
+          $(LIBDIR)/SendCurl.h \
+          $(LIBDIR)/CronLog.h \
+          $(LIBDIR)/PlayerStatProcessor.h
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	@echo "Linkovanie: $@"
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Kompilacia dokoncena: $@"
+
+$(OBJDIR)/PlayersStatAll.o: $(MAIN_SRC) $(HEADERS)
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/Pgsql.o: $(LIBDIR)/Pgsql.cpp $(LIBDIR)/Pgsql.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/SendCurl.o: $(LIBDIR)/SendCurl.cpp $(LIBDIR)/SendCurl.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)/PlayerStatProcessor.o: $(LIBDIR)/PlayerStatProcessor.cpp $(LIBDIR)/PlayerStatProcessor.h
+	@echo "Kompilujem: $<"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJDIR)/*.o
+
+distclean: clean
+	rm -f $(TARGET)
+
+rebuild: distclean all
+
+.PHONY: all clean distclean rebuild

@@ -65,7 +65,12 @@ distclean: clean
 	rm -f $(TARGET)
 
 # Rebuild - kompletné prekompilovanie
-rebuild: distclean all
+# distclean a all su tu volane ako samostatne rekurzivne $(MAKE) prikazy (nie ako
+# dva prerekvizity), aby make pri paralelnom -j$(NPROCS) builde nezacal kompilovat
+# .o subory sucasne s ich mazanim (race condition medzi "clean" a "all").
+rebuild:
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) distclean
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) all
 
 # Spustenie programu
 run: $(TARGET)

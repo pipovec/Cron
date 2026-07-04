@@ -22,7 +22,9 @@
 
 namespace {
 
-constexpr const char* kMasterQuery = "SELECT account_id FROM players_all";
+constexpr const char* kMasterQuery =
+    "SELECT account_id FROM players_all p "
+    "WHERE NOT EXISTS (SELECT 1 FROM players_dead pd WHERE pd.account_id = p.account_id)";
 constexpr int kDefaultBatchSize = 100;
 constexpr int kSaveThreshold = 5000;
 constexpr size_t kDefaultNumThreads = 6;

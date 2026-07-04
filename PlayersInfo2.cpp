@@ -130,7 +130,9 @@ bool PlayersInfoProcessor::PrepareStatements()
 
 bool PlayersInfoProcessor::LoadAccountIds()
 {
-    std::string sql = "SELECT account_id FROM players_all ORDER BY account_id DESC";
+    std::string sql = "SELECT account_id FROM players_all p "
+                       "WHERE NOT EXISTS (SELECT 1 FROM players_dead pd WHERE pd.account_id = p.account_id) "
+                       "ORDER BY account_id DESC";
     if (max_players_ > 0) {
         sql += " LIMIT " + std::to_string(max_players_);
     }
