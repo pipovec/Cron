@@ -356,6 +356,20 @@ static int ProcessJson(const string &json_data, PGconn *conn)
         return 0;
     }
 
+    // Ucet povazujeme za vymazany LEN ak server explicitne odpovie status=ok
+    // a pre dany account_id vrati null. Ak zlyhala cela odpoved (timeout, chyba
+    // API, ina struktura), nesmieme null v "data" zamienat za vymazany ucet.
+    if (!js.contains("status") || js["status"] != "ok")
+    {
+        cout << "WoT API odpoved nema status=ok, davku preskakujem: " << json_data << endl;
+        return 0;
+    }
+
+    if (!js.contains("data") || js["data"].is_null())
+    {
+        return 0;
+    }
+
     js = js["data"];
 
     int dead_count = 0;
