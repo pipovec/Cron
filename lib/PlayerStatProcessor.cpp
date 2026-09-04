@@ -46,15 +46,15 @@ static PGresult *ExecPreparedN(PGconn *conn, const string &stmt, const array<str
     return PQexecPrepared(conn, stmt.c_str(), static_cast<int>(N), params.data(), nullptr, nullptr, 0);
 }
 
-// Zdroj account_id (parametrizovany count/select dotazom zo zdrojovej tabulky)
+// Zdroj account_id (parametrizovany nazvom zdrojovej tabulky)
 class AccountSource
 {
 public:
     PGconn *conn;
     std::unique_ptr<Pgsql> pg;
 
-    AccountSource(string count_query, string select_query)
-        : count_query_(std::move(count_query)), select_query_(std::move(select_query))
+    AccountSource(string count_query, string source_table)
+        : count_query_(std::move(count_query)), source_table_(std::move(source_table))
     {
         pg.reset(new Pgsql());
         this->conn = pg->Get();
@@ -72,14 +72,23 @@ public:
         return stoi(res);
     }
 
-    void GetPlayers(int offset, container *account_ids, int *ntuples)
+    // Dalsia davka account_id za poslednym spracovanym (keyset pagination).
+    //
+    // Povodne to bolo OFFSET, kde Postgres musel pri kazdej davke prejst a
+    // zahodit vsetky predchadzajuce riadky - pri players_all (1,8M riadkov) to
+    // ku koncu behu znamenalo seq scan cez cely zdroj na kazdych 500 uctov.
+    // Keyset ide priamo po indexe na account_id, takze kazda davka stoji rovnako.
+    //
+    // Uz zname vymazane ucty filtrujeme priamo v dotaze, aby kurzor postupoval
+    // podla skutocne vratenych riadkov bez ohladu na zdrojovu tabulku.
+    void GetPlayers(int after_account_id, container *account_ids, int *ntuples)
     {
         PGresult *result;
-        // Obalene ako subquery, aby sme vedeli vyfiltrovat uz zname vymazane
-        // ucty bez ohladu na to, z akej zdrojovej tabulky account_id pochadza.
-        string query = "SELECT src.account_id FROM (" + select_query_ + to_string(offset) +
-                       " LIMIT 500) src WHERE NOT EXISTS "
-                       "(SELECT 1 FROM players_dead pd WHERE pd.account_id = src.account_id)";
+        string query = "SELECT src.account_id FROM " + source_table_ + " src "
+                       "WHERE src.account_id > " + to_string(after_account_id) +
+                       " AND NOT EXISTS "
+                       "(SELECT 1 FROM players_dead pd WHERE pd.account_id = src.account_id) "
+                       "ORDER BY src.account_id LIMIT 500";
         result = PQexec(this->conn, query.c_str());
         this->CheckResult(result);
         int riadkov = PQntuples(result);
@@ -98,7 +107,7 @@ public:
 
 private:
     string count_query_;
-    string select_query_;
+    string source_table_;
 
     void CheckConnection(PGconn *connection)
     {
@@ -437,7 +446,7 @@ int RunJob(const JobConfig &config)
     cout << endl
          << "Program zacal pracovat: " << ctime(&start) << endl;
 
-    AccountSource players(config.count_query, config.select_query);
+    AccountSource players(config.count_query, config.source_table);
     int riadkov = players.GetPocet();
 
     if (config.apply_env_limit)
@@ -454,7 +463,7 @@ int RunJob(const JobConfig &config)
     }
 
     cout << "Pocet riadkov " << riadkov << endl;
-    cout << "QUERY " << config.select_query << endl;
+    cout << "ZDROJ " << config.source_table << endl;
 
     container a_ids;
 
@@ -469,13 +478,22 @@ int RunJob(const JobConfig &config)
     int kolo = 0;
     int mrtvi = 0;
 
-    for (int i = 0; i < riadkov; i += 500)
+    // Keyset kurzor - posledne account_id z predchadzajucej davky
+    int last_account_id = 0;
+
+    while (spracovanych < riadkov)
     {
         kolo++;
-        players.GetPlayers(i, &a_ids, &ntuples);
+        players.GetPlayers(last_account_id, &a_ids, &ntuples);
+
+        if (ntuples == 0)
+            break;
 
         if (ntuples < 500)
             cout << "pocet hracov na spracovanie: " << ntuples << endl;
+
+        // Dotaz vracia riadky zoradene podla account_id, posledny je novy kurzor
+        last_account_id = a_ids.back();
 
         for (size_t start_idx = 0; start_idx < a_ids.size(); start_idx += 100)
         {

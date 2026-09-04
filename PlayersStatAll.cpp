@@ -17,7 +17,7 @@ int main()
     cfg.cron_log_name = "cplusplus:PlayersStatAll";
     cfg.stat_type_name = "PlayersStatAll";
     cfg.count_query = "select count(account_id) from players_all";
-    cfg.select_query = "select account_id from players_all offset ";
+    cfg.source_table = "players_all";
     cfg.run_cleanup = true;
     cfg.apply_env_limit = true;
 

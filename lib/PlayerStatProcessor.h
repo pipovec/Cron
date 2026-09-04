@@ -24,7 +24,8 @@ struct JobConfig
     std::string cron_log_name;   // napr. "cplusplus:PlayersStatAll"
     std::string stat_type_name;  // "Typ=" hodnota v cron_log info
     std::string count_query;     // "SELECT count(account_id) FROM players_all"
-    std::string select_query;    // "SELECT account_id FROM players_all OFFSET "
+    std::string source_table;    // zdrojova tabulka s account_id, napr. "players_all"
+                                 // (strankuje sa keysetom podla account_id)
     bool run_cleanup = false;    // mazanie *_history starsich ako 2 mesiace
     bool apply_env_limit = false; // respektovat PLAYERSSTAT_LIMIT env
 };

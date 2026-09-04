@@ -16,7 +16,7 @@ int main()
     cfg.cron_log_name = "cplusplus:PlayersStatDeparturesGermany";
     cfg.stat_type_name = "PlayersStatDeparturesGermany";
     cfg.count_query = "SELECT count(account_id) FROM departures_germany";
-    cfg.select_query = "SELECT account_id FROM departures_germany OFFSET ";
+    cfg.source_table = "departures_germany";
     cfg.run_cleanup = false;
     cfg.apply_env_limit = false;
 

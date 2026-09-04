@@ -16,7 +16,7 @@ int main()
     cfg.cron_log_name = "cplusplus:PlayersStatAktualneOdchodyPl";
     cfg.stat_type_name = "PlayersStatAktualneOdchodyPl";
     cfg.count_query = "SELECT count(account_id) FROM aktualne_odchody_pl";
-    cfg.select_query = "SELECT account_id FROM aktualne_odchody_pl OFFSET ";
+    cfg.source_table = "aktualne_odchody_pl";
     cfg.run_cleanup = false;
     cfg.apply_env_limit = false;
 
