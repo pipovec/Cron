@@ -95,7 +95,7 @@ void GetPlayersStats::Gets(string account_ids, PlayersStats *playerStat)
                     }
 
                     if(wins > 0) {
-                        data.wins = frags;
+                        data.wins = wins;
                     }else {
                         data.wins = 0.0;
                     }
