@@ -63,6 +63,7 @@ string SendCurl::SendRequest(const char *url, const char *postdata)
         curl_easy_setopt(curl_, CURLOPT_TIMEOUT, SENDCURL_TIMEOUT_SEC);
         curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L); // timeouty bez signalov (bezpecne vo vlaknach)
         curl_easy_setopt(curl_, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(curl_, CURLOPT_ACCEPT_ENCODING, ""); // gzip/deflate, ak ich server ponuka (JSON sa zmensi)
     }
 
     curl_easy_setopt(curl_, CURLOPT_URL, url);
@@ -92,8 +93,6 @@ string SendCurl::SendWGN(string method, string post)
     string tmp_post = api_id + post;
     const char *postdata = tmp_post.c_str();
 
-    string SendRequest(const char *url, const char *postdata);
-
     string data;
     data = this->SendRequest(url, postdata);
 
@@ -108,17 +107,21 @@ string SendCurl::SendWGN(string method, string post)
     }
     catch (json::parse_error &e)
     {
-        cout << "Parser in SendCurl: " << e.what() << endl;
-        cout << js << endl;
+        // bez platneho JSON nema zmysel citat status - volajuci chybu zachyti a zopakuje
+        throw runtime_error(string("SendWGN parse error: ") + e.what());
     }
 
-    string status;
-
-    status = js["status"].get<string>();
+    string status = js.value("status", "");
 
     if (status.compare("ok") != 0)
     {
-        string fail = js["error"]["field"].get<string>() + ", " + js["error"]["message"].get<string>() + ": " + js["error"]["value"].get<string>();
+        auto as_text = [](const json &err, const char *key) {
+            if (!err.is_object() || !err.contains(key)) return string();
+            const json &v = err[key];
+            return v.is_string() ? v.get<string>() : v.dump();
+        };
+        json err = js.contains("error") ? js["error"] : json();
+        string fail = as_text(err, "field") + ", " + as_text(err, "message") + ": " + as_text(err, "value");
         throw runtime_error(fail);
     }
     js.clear();

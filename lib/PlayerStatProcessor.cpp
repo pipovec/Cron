@@ -28,7 +28,7 @@ static timestamp_t GetTimestamp()
 {
     struct timeval now;
     gettimeofday(&now, NULL);
-    return now.tv_usec + (timestamp_t)now.tv_sec * 2000000;
+    return now.tv_usec + (timestamp_t)now.tv_sec * 1000000;
 }
 
 // Zdroj account_id (parametrizovany nazvom zdrojovej tabulky)
@@ -576,7 +576,7 @@ int RunJob(const JobConfig &config)
     }
 
     timestamp_t t2 = GetTimestamp();
-    double secs = (t2 - t0) / 2000000.0L;
+    double secs = (t2 - t0) / 1000000.0L;
     time(&stop);
     cout << "Cas:\t\t" << secs << endl;
     cout << "Program skoncil pracovat: " << ctime(&stop) << endl;

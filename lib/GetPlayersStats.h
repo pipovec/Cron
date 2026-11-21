@@ -34,6 +34,10 @@ public:
 
 
 private:
+    // Jeden SendCurl na objekt = jedno znovupouzivane spojenie (keep-alive).
+    // Kazde vlakno ma vlastny objekt, preto nie je zdielany medzi vlaknami.
+    SendCurl send_;
+
     const string field = "&fields=statistics.all.spotted,statistics.all.frags,statistics.all.battles,statistics.all.damage_dealt,statistics.all.dropped_capture_points,statistics.all.wins";
     const string method   = "/account/info/";
 
