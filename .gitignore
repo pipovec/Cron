@@ -17,3 +17,6 @@ tmp/*
 # Build
 obj/
 *.d
+
+# Lokalna konfiguracia (hesla)
+.env
