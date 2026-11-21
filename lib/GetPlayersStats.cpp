@@ -13,10 +13,21 @@ void GetPlayersStats::Gets(string account_ids, PlayersStats *playerStat)
 {
     string post_data = field +"&account_id="+account_ids;
 
-    SendCurl *send = new SendCurl; 
-    string json_data = send->SendWOT(method, post_data); 
-    delete send;
-    
+    string json_data;
+    try
+    {
+        json_data = send_.SendWOT(method, post_data);
+    }
+    catch (const string &e)
+    {
+        cout << "GetPlayersStats: " << e << " - davku preskakujem" << endl;
+        return;
+    }
+    catch (const std::exception &e)
+    {
+        cout << "GetPlayersStats: " << e.what() << " - davku preskakujem" << endl;
+        return;
+    }
 
     using json = nlohmann::json;
     json js;
