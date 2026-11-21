@@ -22,7 +22,7 @@
 #include <libpq-fe.h>
 #include "ClanData.h"
 #include "../Pgsql.h"
-#include "../../json/src/json.hpp"
+#include <nlohmann/json.hpp>
 
 using namespace std;
 using json = nlohmann::json;

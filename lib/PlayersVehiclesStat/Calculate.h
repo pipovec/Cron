@@ -7,7 +7,7 @@
 #include <queue>
 #include <mutex>
 
-#include "../../json/src/json.hpp"
+#include <nlohmann/json.hpp>
 #include "../Pgsql.h"
 
 using namespace std;

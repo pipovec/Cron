@@ -7,7 +7,7 @@
 #include <mutex>
 
 #include "../Pgsql.h"
-#include "../../json/src/json.hpp"
+#include <nlohmann/json.hpp>
 
 class SaveJsons
 {

@@ -1,5 +1,5 @@
 #include "./SendCurl.h"
-#include "./../json/src/json.hpp"
+#include <nlohmann/json.hpp>
 #include <iostream>
 #include <stdlib.h>
 #include <chrono>

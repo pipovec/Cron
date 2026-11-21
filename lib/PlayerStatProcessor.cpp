@@ -13,7 +13,7 @@
 #include "./CronLog.h"
 #include "./Pgsql.h"
 #include "./SendCurl.h"
-#include "../json/src/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace PlayerStatProcessing
 {

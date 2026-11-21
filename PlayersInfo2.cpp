@@ -23,7 +23,7 @@
 #include "./lib/SendCurl.h"
 #include "./lib/Pgsql.h"
 #include "./lib/CronLog.h"
-#include "./json/src/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace {
 

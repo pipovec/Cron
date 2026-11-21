@@ -112,7 +112,7 @@
 #include "./lib/CronLog.h"
 #include "./lib/KontrolaKlanov/ClanData.h"
 #include "./lib/KontrolaKlanov/ClanProcessor.h"
-#include "./json/src/json.hpp"
+#include <nlohmann/json.hpp>
 
 namespace {
 
