@@ -16,7 +16,7 @@ OBJDIR := obj
 
 PROGRAMS := Players PlayersInfo2 PlayersStatAll PlayersStatNaborNew \
             PlayersStatAktualneOdchody PlayersStatAktualneOdchodyPl \
-            PlayersStatDeparturesGermany PlayersWN8v2 KontrolaKlanov
+            PlayersStatDeparturesGermany PlayersWN8v2 KontrolaKlanov Vehicles
 
 STAT_LIBS := lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerStatProcessor.cpp
 
@@ -47,6 +47,9 @@ KontrolaKlanov_SRCS     := src/KontrolaKlanov.cpp lib/KontrolaKlanov/ClanData.cp
                            lib/KontrolaKlanov/ClanProcessor.cpp lib/SendCurl.cpp lib/Pgsql.cpp
 KontrolaKlanov_CXXFLAGS := -O3
 KontrolaKlanov_LDLIBS   := -lcurl -lpq -lpthread
+
+Vehicles_SRCS   := src/Vehicles.cpp lib/Pgsql.cpp lib/SendCurl.cpp
+Vehicles_LDLIBS := -lpq -lcurl -lpthread
 
 # Kazdy program ma vlastny podadresar obj/<Name>/, aby sa nemiesali rozne flagy.
 define PROG_template

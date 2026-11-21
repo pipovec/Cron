@@ -22,7 +22,7 @@ make clean                 # zmaze obj/
 
 Programy: `Players`, `PlayersInfo2`, `PlayersStatAll`, `PlayersStatNaborNew`,
 `PlayersStatAktualneOdchody`, `PlayersStatAktualneOdchodyPl`,
-`PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`.
+`PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`, `Vehicles`.
 
 ## Konfiguracia
 
