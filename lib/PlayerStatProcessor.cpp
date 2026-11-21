@@ -423,23 +423,59 @@ static int ProcessJson(const string &json_data, PGconn *conn)
     return dead_count;
 }
 
-// Vycisti databazu od zaznamov starsich ako 2 mesiace
+// Vycisti databazu od zaznamov starsich ako 2 mesiace.
+//
+// Maze po davkach po 50000 riadkov (kazda davka je samostatna autocommit
+// transakcia), aby sa nedrzali dlhe zamky ani obrovska transakcia. Davka ide cez
+// primarny kluc (account_id, date), takze vyuzije index a nesiaha na cely stol.
+//
+// VACUUM tu zamerne nie je: v jednom PQexec s DELETE zlyhava (VACUUM nesmie bezat
+// v multi-command stringu, cely retazec sa vratil spat) a o upratanie sa stara
+// autovacuum.
 static void CleanUpHistory()
 {
+    const long long kBatch = 50000;
+
     Pgsql db;
     PGconn *conn = db.Get();
+    if (conn == nullptr)
+    {
+        cout << "CleanUpHistory: bez spojenia s databazou, preskakujem" << endl;
+        return;
+    }
 
-    const char *sql = "DELETE FROM players_stat_all_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_all_history; ";
-    const char *sql1 = "DELETE FROM players_stat_defense_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_defense_history;";
-    const char *sql2 = "DELETE FROM players_stat_gm_absolute_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE  players_stat_gm_absolute_history;";
-    const char *sql3 = "DELETE FROM players_stat_gm_champion_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_gm_champion_history;";
-    const char *sql4 = "DELETE FROM players_stat_skirmish_history WHERE date < now() - interval '2 months'; VACUUM ANALYZE players_stat_skirmish_history;";
+    for (int ti = 0; ti < kTableCount; ti++)
+    {
+        const string h = string(kTables[ti]) + "_history";
+        const string query =
+            "WITH d AS ("
+            "DELETE FROM " + h + " t USING ("
+            "SELECT account_id, date FROM " + h +
+            " WHERE date < (current_date - interval '2 months')::date LIMIT " + to_string(kBatch) +
+            ") x WHERE t.account_id = x.account_id AND t.date = x.date RETURNING 1) "
+            "SELECT count(*) FROM d";
 
-    PQexec(conn, sql);
-    PQexec(conn, sql1);
-    PQexec(conn, sql2);
-    PQexec(conn, sql3);
-    PQexec(conn, sql4);
+        long long total = 0;
+        for (;;)
+        {
+            PGresult *result = PQexec(conn, query.c_str());
+            if (PQresultStatus(result) != PGRES_TUPLES_OK)
+            {
+                cout << "Chyba CleanUpHistory pre " << h << ": " << PQresultErrorMessage(result) << endl;
+                PQclear(result);
+                break;
+            }
+            long long n = stoll(PQgetvalue(result, 0, 0));
+            PQclear(result);
+
+            total += n;
+            if (n < kBatch)
+                break; // posledna (neuplna) davka
+        }
+
+        if (total > 0)
+            cout << "CleanUpHistory " << h << ": zmazanych " << total << endl;
+    }
 }
 
 int RunJob(const JobConfig &config)
