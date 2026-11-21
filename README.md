@@ -22,7 +22,9 @@ make clean                 # zmaze obj/
 
 Programy: `Players`, `PlayersInfo2`, `PlayersStatAll`, `PlayersStatNaborNew`,
 `PlayersStatAktualneOdchody`, `PlayersStatAktualneOdchodyPl`,
-`PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`, `Vehicles`.
+`PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`, `Vehicles`,
+`PlayersVehicleSnapshot`, `PlayersVehicleDelta`, `PlayersWN8Recent`
+(WN8 za 7/14/28 dni, pozri [README_WN8Recent.md](README_WN8Recent.md)).
 
 ## Konfiguracia
 
