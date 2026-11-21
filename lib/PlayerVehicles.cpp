@@ -147,7 +147,10 @@ long long UpsertSnapshot(PGconn *conn, const AccountTanks &tanks)
         "INSERT INTO player_vehicle_snapshot (account_id, tank_id, battles, wins) "
         "SELECT v.a, v.t, v.b, v.w FROM unnest($1::bigint[],$2::bigint[],$3::bigint[],$4::bigint[]) AS v(a,t,b,w) "
         "WHERE true "
-        "ON CONFLICT (account_id, tank_id) DO UPDATE SET battles = EXCLUDED.battles, wins = EXCLUDED.wins",
+        "ON CONFLICT (account_id, tank_id) DO UPDATE "
+        "SET battles = EXCLUDED.battles, wins = EXCLUDED.wins, updated_at = now() "
+        "WHERE (player_vehicle_snapshot.battles, player_vehicle_snapshot.wins) "
+        "IS DISTINCT FROM (EXCLUDED.battles, EXCLUDED.wins)",
         4, nullptr, params, nullptr, nullptr, 0);
 
     if (PQresultStatus(result) != PGRES_COMMAND_OK)

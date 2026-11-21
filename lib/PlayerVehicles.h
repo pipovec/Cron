@@ -33,7 +33,8 @@ bool ParseAccountTanks(const std::string &raw, AccountTanks *out);
 bool FetchAccountTanks(SendCurl &send, const std::vector<long long> &ids, AccountTanks *out);
 
 // Zapise stav do player_vehicle_snapshot (INSERT ... ON CONFLICT DO UPDATE) jednym prikazom.
-// Vracia pocet zapisanych riadkov alebo -1 pri chybe.
+// Existujuce riadky sa menia (a updated_at sa nastavi) len ak sa battles/wins zmenili.
+// Vracia pocet vlozenych alebo zmenenych riadkov alebo -1 pri chybe.
 long long UpsertSnapshot(PGconn *conn, const AccountTanks &tanks);
 
 } // namespace PlayerVehicles
