@@ -7,15 +7,15 @@ Program Players zjednocuje funkčnosť viacerých pôvodných skriptov (PlayersC
 ## Kompilácia
 
 ```bash
-make -f Makefile_Players
+make Players
 ```
 
 ### Ďalšie make príkazy
 
-- `make -f Makefile_Players clean` - vymaže objektové súbory
-- `make -f Makefile_Players distclean` - vymaže všetky vygenerované súbory
-- `make -f Makefile_Players rebuild` - prebuduje celý projekt
-- `make -f Makefile_Players info` - zobrazí informácie o projekte
+- `make clean` - vymaže objektové súbory
+- `make distclean` - vymaže všetky vygenerované súbory
+- `make Players rebuild` - prebuduje celý projekt
+- `make Players info` - zobrazí informácie o projekte
 
 ## Použitie
 

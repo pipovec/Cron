@@ -14,5 +14,6 @@ tmp/*
 .vscode/*
 .idea/
 
-# PostgreSQL header (ak je generovany)
-lib/Pgsql.h
+# Build
+obj/
+*.d

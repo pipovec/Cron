@@ -55,13 +55,13 @@ sudo apt-get install build-essential libpq-dev libcurl4-openssl-dev
 ### Jednoduchá kompilácia
 ```bash
 cd /home/deamon/Development/Cron
-make -f makeKontrolaKlanov
+make KontrolaKlanov
 ```
 
 ### Clean build (zmazanie starých objektových súborov)
 ```bash
-make -f makeKontrolaKlanov clean
-make -f makeKontrolaKlanov
+make clean
+make KontrolaKlanov
 ```
 
 ### Manuálna kompilácia (ak makefile nefunguje)

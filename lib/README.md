@@ -284,7 +284,7 @@ int main() {
 Knižnice sa kompilujú automaticky pomocou makefile:
 
 ```bash
-make -f makeKontrolaKlanov
+make KontrolaKlanov
 ```
 
 Alebo manuálne:

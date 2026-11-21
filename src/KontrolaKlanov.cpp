@@ -28,10 +28,10 @@
 *   ═══════════════════════════════════════════════════════════════════
 *
 *   1. INŠTALÁCIA ZÁVISLOSTÍ (len prvýkrát):
-*      make -f makeKontrolaKlanov install-deps
+*      make KontrolaKlanov install-deps
 *
 *   2. KOMPILÁCIA:
-*      make -f makeKontrolaKlanov
+*      make KontrolaKlanov
 *
 *      Alebo skrátene (make automaticky nájde makeKontrolaKlanov):
 *      make
@@ -40,7 +40,7 @@
 *      ./bin/KontrolaKlanov
 *
 *      Alebo priamo skompiluj a spusti:
-*      make -f makeKontrolaKlanov run
+*      make KontrolaKlanov run
 *
 *   4. ĎALŠIE PRÍKAZY:
 *      make help         - Zobrazí všetky dostupné príkazy
