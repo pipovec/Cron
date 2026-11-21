@@ -125,18 +125,30 @@ static void GetAccountId(size_t start, size_t end, const container &account_ids,
     }
 }
 
-// Poslanie dat account_id na server a ziskanie JSON
-static void SendPost(const string &aids, string *json)
+// Poslanie dat account_id na server a ziskanie JSON.
+// Pri sietovej chybe (po opakovaniach v SendWOT) vrati prazdny JSON - davka sa preskoci.
+static void SendPost(SendCurl &send, const string &aids, string *json)
 {
     string field = "&fields=-statistics.historical,-statistics.clan,-statistics.regular_team,-statistics.fallout,-statistics.team,-statistics.company,-clan_id,-global_rating,-client_language,-last_battle_time,-created_at,-updated_at";
     string extra = "&extra=statistics.globalmap_absolute,statistics.globalmap_champion";
     const string method = "/account/info/";
 
-    if (!aids.empty())
+    json->clear();
+    if (aids.empty())
+        return;
+
+    string post_data = field + extra + "&account_id=" + aids;
+    try
     {
-        string post_data = field + extra + "&account_id=" + aids;
-        SendCurl send;
         *json = send.SendWOT(method, post_data);
+    }
+    catch (const string &e)
+    {
+        cout << "SendPost: " << e << " - davku preskakujem" << endl;
+    }
+    catch (const std::exception &e)
+    {
+        cout << "SendPost: " << e.what() << " - davku preskakujem" << endl;
     }
 }
 
@@ -508,6 +520,7 @@ int RunJob(const JobConfig &config)
     cout << "ZDROJ " << config.source_table << endl;
 
     container a_ids;
+    SendCurl send; // jedno spojenie (keep-alive) pre cely beh
 
     int ntuples = 0;
     int spracovanych = 0;
@@ -539,7 +552,7 @@ int RunJob(const JobConfig &config)
             GetAccountId(start_idx, end_idx, a_ids, &aids);
             if (!aids.empty())
             {
-                SendPost(aids, &json_response);
+                SendPost(send, aids, &json_response);
                 mrtvi += ProcessJson(json_response, players.conn);
             }
         }
