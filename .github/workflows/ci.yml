@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master, hetzner]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        makefile:
+          - Makefile_Players
+          - Makefile_PlayersInfo2
+          - Makefile_PlayersStatAktualneOdchody
+          - Makefile_PlayersStatAktualneOdchodyPl
+          - Makefile_PlayersStatAll
+          - Makefile_PlayersStatDeparturesGermany
+          - Makefile_PlayersStatNaborNew
+          - makeKontrolaKlanov
+          - makePlayersWN8v2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ make libpq-dev libcurl4-openssl-dev
+
+      - name: Build ${{ matrix.makefile }}
+        run: make -f ${{ matrix.makefile }} -j"$(nproc)"
