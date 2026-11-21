@@ -5,21 +5,33 @@
  * stiahne /account/tanks/ a ulozi aktualny stav bitiek/vyhier na kazdom tanku. Prirastky
  * sa pri tom NEzapisuju - tabulka sluzi ako vychodzi stav pre denny vypocet prirastkov.
  *
- * Premenne prostredia:
- *   VEHICLE_AFTER_ACCOUNT_ID  pokracovat za danym account_id (obnovenie po prerusenom behu)
- *   VEHICLE_LIMIT             spracovat najviac N hracov (na testovanie), 0 = vsetkych
+ * Bezi vo viacerych vlaknach (kazde ma vlastne spojenie do DB aj vlastny curl). Davky sa
+ * beru pod mutexom z jedneho kurzora (keyset podla account_id).
  *
- * Pri zlyhani davky vypise "ZLYHALA DAVKA po account_id=X" - rovnaku davku zopakujes
- * spustenim s VEHICLE_AFTER_ACCOUNT_ID=X.
+ * Obnovenie: v predvolenom rezime sa vynechaju ucty, ktore uz v snapshote su - po prerusenom
+ * alebo castocne zlyhanom behu staci program spustit znova. Hraci bez tankov nemaju riadky,
+ * takze sa pri kazdom spusteni opytaju znova (zanedbatelne).
+ *
+ * Premenne prostredia:
+ *   VEHICLE_THREADS           pocet vlakien (default 4, 1 az 16)
+ *   VEHICLE_LIMIT             spracovat najviac N hracov (na testovanie), 0 = vsetkych
+ *   VEHICLE_AFTER_ACCOUNT_ID  zacat za danym account_id (default 0)
+ *   VEHICLE_REFRESH=1         nevynechavat ucty, ktore uz su v snapshote (upsert zmeni len
+ *                             riadky, kde sa battles/wins zmenili)
  *
  * Najprv vytvor tabulky: psql -d clan -f sql/001_player_vehicle_tables.sql
  */
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "./lib/CronLog.h"
@@ -43,20 +55,25 @@ static long long EnvLongLong(const char *name, long long fallback)
     }
 }
 
-// Dalsia davka account_id za 'after' (keyset), bez uz znamych vymazanych uctov
-static bool NextBatch(PGconn *conn, long long after, std::vector<long long> *ids)
+// Dalsia davka account_id za 'after' (keyset), bez uz znamych vymazanych uctov.
+// Ak skip_existing, vynechava aj ucty, ktore uz maju riadky v player_vehicle_snapshot.
+static bool NextBatch(PGconn *conn, long long after, long long want, bool skip_existing,
+                      std::vector<long long> *ids)
 {
     ids->clear();
     const std::string after_s = std::to_string(after);
-    const char *params[1] = {after_s.c_str()};
+    const std::string want_s = std::to_string(want);
+    const char *params[2] = {after_s.c_str(), want_s.c_str()};
 
-    PGresult *result = PQexecParams(
-        conn,
-        "SELECT pa.account_id FROM players_all pa "
-        "WHERE pa.account_id > $1::int "
-        "AND NOT EXISTS (SELECT 1 FROM players_dead pd WHERE pd.account_id = pa.account_id) "
-        "ORDER BY pa.account_id LIMIT 100",
-        1, nullptr, params, nullptr, nullptr, 0);
+    const std::string query =
+        std::string("SELECT pa.account_id FROM players_all pa "
+                    "WHERE pa.account_id > $1::int "
+                    "AND NOT EXISTS (SELECT 1 FROM players_dead pd WHERE pd.account_id = pa.account_id) ") +
+        (skip_existing ? "AND NOT EXISTS (SELECT 1 FROM player_vehicle_snapshot s WHERE s.account_id = pa.account_id) "
+                       : "") +
+        "ORDER BY pa.account_id LIMIT $2::int";
+
+    PGresult *result = PQexecParams(conn, query.c_str(), 2, nullptr, params, nullptr, nullptr, 0);
 
     if (PQresultStatus(result) != PGRES_TUPLES_OK)
     {
@@ -73,79 +90,166 @@ static bool NextBatch(PGconn *conn, long long after, std::vector<long long> *ids
     return true;
 }
 
+// Stav zdielany medzi vlaknami
+struct Shared
+{
+    std::mutex cursor_mtx;          // chrani kurzor a dispatched
+    PGconn *cursor_conn = nullptr;  // spojenie len na vyber davok (pouziva sa pod cursor_mtx)
+    long long after = 0;
+    long long dispatched = 0;
+    long long limit = 0;
+    bool skip_existing = true;
+    bool done = false;
+
+    std::atomic<long long> last_after{0};
+    std::atomic<long long> players{0}, rows{0}, batches{0}, failed{0};
+    std::atomic<bool> db_error{false};
+
+    std::mutex print_mtx;
+    std::chrono::steady_clock::time_point t0;
+};
+
+static void Worker(Shared &sh, Pgsql &db)
+{
+    try
+    {
+        SendCurl send;
+        PGconn *conn = db.Get();
+        if (conn == nullptr)
+        {
+            std::cerr << "Vlakno: bez spojenia s databazou" << std::endl;
+            sh.db_error = true;
+            return;
+        }
+
+        std::vector<long long> ids;
+        while (true)
+        {
+            long long first_after;
+            {
+                std::lock_guard<std::mutex> lock(sh.cursor_mtx);
+                if (sh.done)
+                    return;
+
+                long long want = 100;
+                if (sh.limit > 0)
+                {
+                    want = std::min<long long>(100, sh.limit - sh.dispatched);
+                    if (want <= 0)
+                    {
+                        sh.done = true;
+                        return;
+                    }
+                }
+
+                first_after = sh.after;
+                if (!NextBatch(sh.cursor_conn, sh.after, want, sh.skip_existing, &ids))
+                {
+                    sh.db_error = true;
+                    sh.done = true;
+                    return;
+                }
+                if (ids.empty())
+                {
+                    sh.done = true;
+                    return;
+                }
+                sh.after = ids.back();
+                sh.dispatched += static_cast<long long>(ids.size());
+                sh.last_after = sh.after;
+            }
+
+            PlayerVehicles::AccountTanks tanks;
+            bool ok = PlayerVehicles::FetchAccountTanks(send, ids, &tanks);
+            if (ok)
+            {
+                long long n = PlayerVehicles::UpsertSnapshot(conn, tanks);
+                if (n < 0)
+                    ok = false;
+                else
+                    sh.rows += n;
+            }
+
+            if (!ok)
+            {
+                // Ucty ostanu bez snapshotu - pri dalsom spusteni sa spracuju znova
+                sh.failed++;
+                std::lock_guard<std::mutex> lock(sh.print_mtx);
+                std::cout << "ZLYHALA DAVKA po account_id=" << first_after << " (" << ids.size()
+                          << " uctov, spracuju sa pri dalsom spusteni)" << std::endl;
+            }
+
+            sh.players += static_cast<long long>(ids.size());
+            long long b = ++sh.batches;
+            if (b % 100 == 0)
+            {
+                double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - sh.t0).count();
+                std::lock_guard<std::mutex> lock(sh.print_mtx);
+                std::cout << "hracov " << sh.players.load() << ", riadkov " << sh.rows.load() << ", davok " << b
+                          << ", kurzor account_id=" << sh.last_after.load() << ", " << static_cast<long long>(secs)
+                          << " s" << std::endl;
+            }
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Vlakno skoncilo vynimkou: " << e.what() << std::endl;
+        sh.db_error = true;
+    }
+    catch (...)
+    {
+        std::cerr << "Vlakno skoncilo neznamou vynimkou" << std::endl;
+        sh.db_error = true;
+    }
+}
+
 int main()
 {
     CronLog::ScopedRun cron_log("cplusplus:PlayersVehicleSnapshot");
 
-    Pgsql db;
-    PGconn *conn = db.Get();
-    if (conn == nullptr)
+    const long long threads = std::max<long long>(1, std::min<long long>(16, EnvLongLong("VEHICLE_THREADS", 4)));
+
+    Shared sh;
+    sh.after = EnvLongLong("VEHICLE_AFTER_ACCOUNT_ID", 0);
+    sh.last_after = sh.after;
+    sh.limit = EnvLongLong("VEHICLE_LIMIT", 0);
+    sh.skip_existing = EnvLongLong("VEHICLE_REFRESH", 0) == 0;
+
+    // Spojenia sa vytvaraju v hlavnom vlakne (nacitanie konfiguracie nie je potrebne robit paralelne)
+    Pgsql cursor_db;
+    sh.cursor_conn = cursor_db.Get();
+    if (sh.cursor_conn == nullptr)
     {
         std::cerr << "Bez spojenia s databazou" << std::endl;
         return 1;
     }
+    std::vector<std::unique_ptr<Pgsql>> dbs;
+    for (long long i = 0; i < threads; i++)
+        dbs.emplace_back(new Pgsql());
 
-    long long after = EnvLongLong("VEHICLE_AFTER_ACCOUNT_ID", 0);
-    const long long limit = EnvLongLong("VEHICLE_LIMIT", 0);
+    std::cout << "PlayersVehicleSnapshot: start, vlakien=" << threads << ", po account_id=" << sh.after
+              << (sh.skip_existing ? ", preskakujem ucty uz v snapshote" : ", refresh vsetkych")
+              << (sh.limit > 0 ? ", limit=" + std::to_string(sh.limit) : "") << std::endl;
 
-    std::cout << "PlayersVehicleSnapshot: start, po account_id=" << after
-              << (limit > 0 ? ", limit=" + std::to_string(limit) : "") << std::endl;
+    sh.t0 = std::chrono::steady_clock::now();
 
-    SendCurl send;
-    const auto t0 = std::chrono::steady_clock::now();
+    std::vector<std::thread> workers;
+    for (long long i = 0; i < threads; i++)
+        workers.emplace_back(Worker, std::ref(sh), std::ref(*dbs[i]));
+    for (auto &w : workers)
+        w.join();
 
-    long long players = 0, rows = 0, batches = 0, failed = 0;
-    std::vector<long long> ids;
-
-    while (limit == 0 || players < limit)
-    {
-        if (!NextBatch(conn, after, &ids))
-            return 1;
-        if (ids.empty())
-            break;
-
-        PlayerVehicles::AccountTanks tanks;
-        if (!PlayerVehicles::FetchAccountTanks(send, ids, &tanks))
-        {
-            std::cout << "ZLYHALA DAVKA po account_id=" << after << std::endl;
-            failed++;
-        }
-        else
-        {
-            long long n = PlayerVehicles::UpsertSnapshot(conn, tanks);
-            if (n < 0)
-            {
-                std::cout << "ZLYHALA DAVKA po account_id=" << after << " (zapis)" << std::endl;
-                failed++;
-            }
-            else
-            {
-                rows += n;
-            }
-        }
-
-        players += static_cast<long long>(ids.size());
-        after = ids.back();
-        batches++;
-
-        if (batches % 100 == 0)
-        {
-            double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-            std::cout << "hracov " << players << ", riadkov " << rows << ", davok " << batches
-                      << ", posledne account_id=" << after << ", " << static_cast<long long>(secs) << " s"
-                      << std::endl;
-        }
-    }
-
-    double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    std::cout << "Hotovo: hracov " << players << ", riadkov " << rows << ", davok " << batches
-              << ", zlyhanych davok " << failed << ", cas " << secs << " s, posledne account_id=" << after
-              << std::endl;
+    double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - sh.t0).count();
+    std::cout << "Hotovo: hracov " << sh.players.load() << ", riadkov " << sh.rows.load() << ", davok "
+              << sh.batches.load() << ", zlyhanych davok " << sh.failed.load() << ", cas " << secs
+              << " s, kurzor account_id=" << sh.last_after.load() << std::endl;
 
     std::ostringstream info;
-    info << "STATISTIKA SPRACOVANIA Typ=PlayersVehicleSnapshot Hraci=" << players << " Riadky=" << rows
-         << " Davky=" << batches << " Chyby=" << failed;
+    info << "STATISTIKA SPRACOVANIA Typ=PlayersVehicleSnapshot Hraci=" << sh.players.load()
+         << " Riadky=" << sh.rows.load() << " Davky=" << sh.batches.load() << " Chyby=" << sh.failed.load();
     cron_log.SetInfo(info.str());
 
-    return failed > 0 ? 2 : 0;
+    if (sh.db_error)
+        return 1;
+    return sh.failed > 0 ? 2 : 0;
 }

@@ -53,7 +53,7 @@ Vehicles_SRCS   := src/Vehicles.cpp lib/Pgsql.cpp lib/SendCurl.cpp
 Vehicles_LDLIBS := -lpq -lcurl -lpthread
 
 PlayersVehicleSnapshot_SRCS   := src/PlayersVehicleSnapshot.cpp lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerVehicles.cpp
-PlayersVehicleSnapshot_LDLIBS := -lpq -lcurl
+PlayersVehicleSnapshot_LDLIBS := -lpq -lcurl -lpthread
 
 # Kazdy program ma vlastny podadresar obj/<Name>/, aby sa nemiesali rozne flagy.
 define PROG_template
