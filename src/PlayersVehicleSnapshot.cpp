@@ -8,18 +8,22 @@
  * Bezi vo viacerych vlaknach (kazde ma vlastne spojenie do DB aj vlastny curl). Davky sa
  * beru pod mutexom z jedneho kurzora (keyset podla account_id).
  *
- * Obnovenie: v predvolenom rezime sa vynechaju ucty, ktore uz v snapshote su - po prerusenom
- * alebo castocne zlyhanom behu staci program spustit znova. Hraci bez tankov nemaju riadky,
- * takze sa pri kazdom spusteni opytaju znova (zanedbatelne).
+ * Pre kazdeho spracovaneho hraca (aj bez tankov) zapise riadok do player_vehicle_sync s datumom
+ * posledneho riadka players_stat_all_history, ktory je uz v snapshote zahrnuty (stav k zaciatku
+ * behu). Podla toho denny job (PlayersVehicleDelta) vie, od ktoreho dna ma pocitat prirastky.
+ *
+ * Obnovenie: v predvolenom rezime sa vynechaju ucty, ktore uz maju riadok v player_vehicle_sync -
+ * po prerusenom alebo castocne zlyhanom behu staci program spustit znova.
  *
  * Premenne prostredia:
  *   VEHICLE_THREADS           pocet vlakien (default 4, 1 az 16)
  *   VEHICLE_LIMIT             spracovat najviac N hracov (na testovanie), 0 = vsetkych
  *   VEHICLE_AFTER_ACCOUNT_ID  zacat za danym account_id (default 0)
- *   VEHICLE_REFRESH=1         nevynechavat ucty, ktore uz su v snapshote (upsert zmeni len
- *                             riadky, kde sa battles/wins zmenili)
+ *   VEHICLE_REFRESH=1         nevynechavat ucty, ktore uz maju riadok v player_vehicle_sync
+ *                             (upsert zmeni len riadky snapshotu, kde sa battles/wins zmenili)
  *
  * Najprv vytvor tabulky: psql -d clan -f sql/001_player_vehicle_tables.sql
+ *                        psql -d clan -f sql/002_player_vehicle_sync.sql
  */
 
 #include <algorithm>
@@ -56,7 +60,7 @@ static long long EnvLongLong(const char *name, long long fallback)
 }
 
 // Dalsia davka account_id za 'after' (keyset), bez uz znamych vymazanych uctov.
-// Ak skip_existing, vynechava aj ucty, ktore uz maju riadky v player_vehicle_snapshot.
+// Ak skip_existing, vynechava aj ucty, ktore uz maju riadok v player_vehicle_sync.
 static bool NextBatch(PGconn *conn, long long after, long long want, bool skip_existing,
                       std::vector<long long> *ids)
 {
@@ -69,7 +73,7 @@ static bool NextBatch(PGconn *conn, long long after, long long want, bool skip_e
         std::string("SELECT pa.account_id FROM players_all pa "
                     "WHERE pa.account_id > $1::int "
                     "AND NOT EXISTS (SELECT 1 FROM players_dead pd WHERE pd.account_id = pa.account_id) ") +
-        (skip_existing ? "AND NOT EXISTS (SELECT 1 FROM player_vehicle_snapshot s WHERE s.account_id = pa.account_id) "
+        (skip_existing ? "AND NOT EXISTS (SELECT 1 FROM player_vehicle_sync s WHERE s.account_id = pa.account_id) "
                        : "") +
         "ORDER BY pa.account_id LIMIT $2::int";
 
@@ -100,6 +104,7 @@ struct Shared
     long long limit = 0;
     bool skip_existing = true;
     bool done = false;
+    std::string synced_date;        // datum posledneho riadka historie zahrnuteho v snapshote
 
     std::atomic<long long> last_after{0};
     std::atomic<long long> players{0}, rows{0}, batches{0}, failed{0};
@@ -165,9 +170,21 @@ static void Worker(Shared &sh, Pgsql &db)
             {
                 long long n = PlayerVehicles::UpsertSnapshot(conn, tanks);
                 if (n < 0)
+                {
                     ok = false;
+                }
                 else
+                {
                     sh.rows += n;
+
+                    // Sync riadok aj pre hracov bez tankov - tych uz netreba pri obnoveni znova sahat
+                    std::vector<std::pair<long long, std::string>> sync;
+                    sync.reserve(ids.size());
+                    for (long long id : ids)
+                        sync.emplace_back(id, sh.synced_date);
+                    if (PlayerVehicles::UpsertSync(conn, sync) < 0)
+                        ok = false;
+                }
             }
 
             if (!ok)
@@ -223,11 +240,26 @@ int main()
         std::cerr << "Bez spojenia s databazou" << std::endl;
         return 1;
     }
+
+    // Datum posledneho riadka historie - snapshot, ktory teraz stiahneme, ho uz obsahuje
+    {
+        PGresult *r = PQexec(sh.cursor_conn, "SELECT coalesce(max(date), current_date - 1)::text FROM players_stat_all_history");
+        if (PQresultStatus(r) != PGRES_TUPLES_OK || PQntuples(r) != 1)
+        {
+            std::cerr << "Chyba zistenia datumu historie: " << PQerrorMessage(sh.cursor_conn) << std::endl;
+            PQclear(r);
+            return 1;
+        }
+        sh.synced_date = PQgetvalue(r, 0, 0);
+        PQclear(r);
+    }
+
     std::vector<std::unique_ptr<Pgsql>> dbs;
     for (long long i = 0; i < threads; i++)
         dbs.emplace_back(new Pgsql());
 
-    std::cout << "PlayersVehicleSnapshot: start, vlakien=" << threads << ", po account_id=" << sh.after
+    std::cout << "PlayersVehicleSnapshot: start, vlakien=" << threads << ", synced_date=" << sh.synced_date
+              << ", po account_id=" << sh.after
               << (sh.skip_existing ? ", preskakujem ucty uz v snapshote" : ", refresh vsetkych")
               << (sh.limit > 0 ? ", limit=" + std::to_string(sh.limit) : "") << std::endl;
 
