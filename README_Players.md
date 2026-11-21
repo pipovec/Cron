@@ -12,10 +12,9 @@ make Players
 
 ### Ďalšie make príkazy
 
-- `make clean` - vymaže objektové súbory
-- `make distclean` - vymaže všetky vygenerované súbory
-- `make Players rebuild` - prebuduje celý projekt
-- `make Players info` - zobrazí informácie o projekte
+- `make clean` - vymaže `obj/`
+- `make distclean` - vymaže aj binárky v `bin/`
+- `make` - zbuilduje všetky programy projektu
 
 ## Použitie
 
@@ -48,8 +47,8 @@ make Players
 
 ```
 C++/
-├── Players.cpp              # Hlavný program
-├── Makefile_Players         # Makefile pre kompiláciu
+├── src/Players.cpp          # Hlavný program
+├── Makefile                 # Spoločný Makefile pre všetky programy
 ├── lib/
 │   ├── Pgsql.h/cpp         # PostgreSQL databázové pripojenie
 │   ├── SendCurl.h/cpp      # HTTP komunikácia s WG API

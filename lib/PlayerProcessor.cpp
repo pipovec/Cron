@@ -312,7 +312,7 @@ std::string Spracuj::spracuj_json_vyber_clan_id(const std::string& json, int cla
     return clan_data;
 }
 
-void Spracuj::spracuj_json_map(const std::string& clan_data_input, int* members_count)
+void Spracuj::spracuj_json_map(const std::string& clan_data_input, int* /*members_count*/)
 {
     std::string clan_data = clan_data_input;
     size_t begin = clan_data.find("[");

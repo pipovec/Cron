@@ -1,5 +1,7 @@
 # Knižnice pre program Nabor.cpp
 
+> **Poznámka:** `Nabor.cpp` a `Makefile_Nabor` boli archivované (nájdeš ich v histórii gitu pred commitom `2ada04e`). Knižnice v `lib/nabor/` sa aktuálne žiadnym cieľom v `Makefile` nebuildujú.
+
 Tento adresár obsahuje špecializované triedy používané výlučne programom `Nabor.cpp`.
 
 ## Súbory

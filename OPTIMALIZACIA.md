@@ -1,5 +1,7 @@
 # Optimalizácia programu Nabor.cpp
 
+> **Poznámka:** `Nabor.cpp` a `Makefile_Nabor` boli archivované (nájdeš ich v histórii gitu pred commitom `2ada04e`). Knižnice v `lib/nabor/` sa aktuálne žiadnym cieľom v `Makefile` nebuildujú.
+
 ## Prehľad zmien
 
 Program bol kompletne refaktorovaný s cieľom výrazného zlepšenia výkonu, bezpečnosti a udržiavateľnosti kódu.
