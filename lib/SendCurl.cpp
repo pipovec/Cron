@@ -5,9 +5,32 @@
 #include <chrono>
 #include <thread>
 
+// Limity v sekundach. Prepisatelne pri kompilacii (-DSENDCURL_TIMEOUT_SEC=...), pouziva test.
+#ifndef SENDCURL_CONNECT_TIMEOUT_SEC
+#define SENDCURL_CONNECT_TIMEOUT_SEC 15L
+#endif
+#ifndef SENDCURL_TIMEOUT_SEC
+#define SENDCURL_TIMEOUT_SEC 120L
+#endif
+
+// Pocet pokusov SendWOT pri sietovej chybe (timeout, spojenie zlyhalo) a pauza medzi nimi
+static const int kMaxNetAttempts = 3;
+static const int kNetRetryPauseSec = 10;
+
 SendCurl::SendCurl()
 {
-    // ctor
+    // curl_global_init nie je thread-safe; C++11 zaruci jedno bezpecne vykonanie
+    static const CURLcode kGlobalInit = curl_global_init(CURL_GLOBAL_DEFAULT);
+    (void)kGlobalInit;
+}
+
+void SendCurl::ResetHandle()
+{
+    if (curl_ != nullptr)
+    {
+        curl_easy_cleanup(curl_);
+        curl_ = nullptr;
+    }
 }
 
 int writer(char *data, size_t size, size_t nmemb, std::string *buffer)
@@ -24,29 +47,36 @@ int writer(char *data, size_t size, size_t nmemb, std::string *buffer)
 
 string SendCurl::SendRequest(const char *url, const char *postdata)
 {
-
-    CURL *curl;
-    CURLcode res;
     string buffer;
-    string error = "Curl error";
 
-    curl = curl_easy_init();
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-    
-    res = curl_easy_perform(curl);
-
-    /* Check for errors */
-    if (res != CURLE_OK)
-    {        
-        curl_easy_cleanup(curl);
-        throw error;
+    // Handle sa vytvara raz a znovupouziva - libcurl tak drzi spojenie so serverom otvorene
+    // (keep-alive) a dalsie requesty nerobia novy TCP handshake.
+    if (curl_ == nullptr)
+    {
+        curl_ = curl_easy_init();
+        if (curl_ == nullptr)
+        {
+            throw string("Curl error: curl_easy_init zlyhal");
+        }
+        curl_easy_setopt(curl_, CURLOPT_WRITEFUNCTION, writer);
+        curl_easy_setopt(curl_, CURLOPT_CONNECTTIMEOUT, SENDCURL_CONNECT_TIMEOUT_SEC);
+        curl_easy_setopt(curl_, CURLOPT_TIMEOUT, SENDCURL_TIMEOUT_SEC);
+        curl_easy_setopt(curl_, CURLOPT_NOSIGNAL, 1L); // timeouty bez signalov (bezpecne vo vlaknach)
+        curl_easy_setopt(curl_, CURLOPT_TCP_KEEPALIVE, 1L);
     }
 
-    curl_easy_cleanup(curl);
+    curl_easy_setopt(curl_, CURLOPT_URL, url);
+    curl_easy_setopt(curl_, CURLOPT_POSTFIELDS, postdata);
+    curl_easy_setopt(curl_, CURLOPT_WRITEDATA, &buffer);
+
+    CURLcode res = curl_easy_perform(curl_);
+
+    if (res != CURLE_OK)
+    {
+        string error = string("Curl error: ") + curl_easy_strerror(res);
+        ResetHandle(); // po chybe zacneme s cistym handle aj spojenim
+        throw error;
+    }
 
     return buffer;
 }
@@ -108,9 +138,25 @@ string SendCurl::SendWOT(string method, string post)
     string tmp_post = api_id + post;
     const char *postdata = tmp_post.c_str();
 
+    int net_failures = 0;
+
     while (true)
     {
-        data = this->SendRequest(url, postdata);
+        try
+        {
+            data = this->SendRequest(url, postdata);
+        }
+        catch (const string &e)
+        {
+            if (++net_failures >= kMaxNetAttempts)
+            {
+                throw; // po poslednom pokuse chybu posunieme volajucemu
+            }
+            cout << "SendWOT sietova chyba (" << e << "), pokus " << net_failures << "/" << kMaxNetAttempts
+                 << ", cakam " << kNetRetryPauseSec << " sekund..." << endl;
+            this_thread::sleep_for(chrono::seconds(kNetRetryPauseSec));
+            continue;
+        }
 
         using json = nlohmann::json;
         json js;
@@ -172,4 +218,5 @@ bool SendCurl::SkontrolujStatus(string data)
 
 SendCurl::~SendCurl()
 {
+    ResetHandle();
 }

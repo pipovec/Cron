@@ -20,6 +20,10 @@ class SendCurl
 {
     public:
             SendCurl();
+            // Instancia drzi jeden curl handle (keep-alive medzi volaniami), preto sa nesmie
+            // kopirovat ani zdielat medzi vlaknami.
+            SendCurl(const SendCurl &) = delete;
+            SendCurl &operator=(const SendCurl &) = delete;
             string SendWGN(string method, string post);
             string SendWOT(string method, string post);
             ~SendCurl();
@@ -27,7 +31,9 @@ class SendCurl
     
     private:
             string SendRequest(const char *url, const char *postdata);
-            bool SkontrolujStatus(string data);    
+            bool SkontrolujStatus(string data);
+            void ResetHandle();
+            CURL *curl_ = nullptr;   // znovupouzivany handle, vytvori sa pri prvom requeste
             const string server_wgn   = "http://api.worldoftanks.eu/wgn";
             const string server_wot   = "http://api.worldoftanks.eu/wot"; 
             const string api_id       = "application_id=c428e2923f3d626de8cbcb3938bb68f8";
