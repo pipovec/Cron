@@ -17,7 +17,7 @@ OBJDIR := obj
 PROGRAMS := Players PlayersInfo2 PlayersStatAll PlayersStatNaborNew \
             PlayersStatAktualneOdchody PlayersStatAktualneOdchodyPl \
             PlayersStatDeparturesGermany PlayersWN8v2 KontrolaKlanov Vehicles \
-            PlayersVehicleSnapshot PlayersVehicleDelta
+            PlayersVehicleSnapshot PlayersVehicleDelta PlayersWN8Recent
 
 STAT_LIBS := lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerStatProcessor.cpp
 
@@ -40,7 +40,7 @@ PlayersStatAktualneOdchodyPl_LDLIBS    := -lpq -lcurl
 PlayersStatDeparturesGermany_LDLIBS    := -lpq -lcurl
 
 PlayersWN8v2_SRCS     := src/PlayersWN8v2.cpp lib/Pgsql.cpp lib/SendCurl.cpp \
-                         lib/GetPlayersStats.cpp lib/GetPlayersVehicles.cpp
+                         lib/GetPlayersStats.cpp lib/GetPlayersVehicles.cpp lib/Wn8Formula.cpp
 PlayersWN8v2_CXXFLAGS := -O3 -march=native -flto -fPIC
 PlayersWN8v2_LDLIBS   := -lpq -lcurl -lpthread
 
@@ -57,6 +57,9 @@ PlayersVehicleSnapshot_LDLIBS := -lpq -lcurl -lpthread
 
 PlayersVehicleDelta_SRCS   := src/PlayersVehicleDelta.cpp lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerVehicles.cpp
 PlayersVehicleDelta_LDLIBS := -lpq -lcurl -lpthread
+
+PlayersWN8Recent_SRCS   := src/PlayersWN8Recent.cpp lib/Pgsql.cpp lib/Wn8Formula.cpp
+PlayersWN8Recent_LDLIBS := -lpq
 
 # Kazdy program ma vlastny podadresar obj/<Name>/, aby sa nemiesali rozne flagy.
 define PROG_template

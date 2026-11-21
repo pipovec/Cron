@@ -19,6 +19,7 @@
 #include "./lib/CronLog.h"
 #include "./lib/GetPlayersStats.h"
 #include "./lib/GetPlayersVehicles.h"
+#include "./lib/Wn8Formula.h"
 
 namespace {
 
@@ -146,25 +147,9 @@ public:
             return 0.0f;
         }
 
-        double rDMG  = player_data.dmg   / expDMG;
-        double rSpot = player_data.spot  / expSpot;
-        double rFrag = player_data.frags / expFrag;
-        double rDef  = player_data.dcp   / expDef;
-        double rWin  = player_data.wins  / expWin;
-
-        double rDMGc  = std::max(0.0, (rDMG  - 0.22) / 0.78);
-        double rSpotc = std::max(0.0, std::min(rDMGc + 0.1, (rSpot - 0.38) / 0.62));
-        double rFragc = std::max(0.0, std::min(rDMGc + 0.2, (rFrag - 0.12) / 0.88));
-        double rDefc  = std::max(0.0, std::min(rDMGc + 0.1, (rDef  - 0.10) / 0.90));
-        double rWinc  = std::max(0.0, (rWin  - 0.71) / 0.29);
-
-        return static_cast<float>(
-            980.0 * rDMGc +
-            210.0 * rDMGc * rFragc +
-            155.0 * rFragc * rSpotc +
-            75.0  * rDefc * rFragc +
-            145.0 * std::min(1.8, rWinc)
-        );
+        return Wn8::Compute(
+            {player_data.dmg, player_data.spot, player_data.frags, player_data.dcp, player_data.wins},
+            {expDMG, expSpot, expFrag, expDef, expWin});
     }
 
 private:
