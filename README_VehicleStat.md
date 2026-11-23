@@ -34,13 +34,18 @@ Dlhy beh na pozadi:
 nohup ./bin/PlayersVehicleStat full > /home/deamon/outputs/C++/PlayersVehicleStatFull.txt 2>&1 &
 ```
 
-Cron (po `PlayersStatAll`, ktory o 07:15 doplni historiu za vcera):
+Cron: bezi ako posledny krok nocneho retazca `scripts/nightly_chain.sh` (02:15), az po
+`PlayersStatAll`, lebo rezim `active` cita historiu za vcera:
 
 ```
-00 08 * * * cd .../crons && ./bin/PlayersVehicleStat active > .../PlayersVehicleStat.txt 2>&1
+15 02 * * * /home/deamon/projects/crons/scripts/nightly_chain.sh
 ```
 
-V pondelok nema historia za nedelu (`PlayersStatAll` bezi utorok az nedela), takze `active`
+Retazec: `PlayersStatAll` (okrem pondelka) -> `PlayersVehicleDelta` -> `PlayersWN8Recent` ->
+`PlayersVehicleStat active` -> `PlayersWN8v2`. Kazdy krok zacne az po skonceni predchadzajuceho, vystupy su v
+`/home/deamon/outputs/C++/<Program>.txt` a priebeh v `NightlyChain.txt`.
+
+V pondelok sa `PlayersStatAll` nespusta (historia za nedelu sa nezbiera), takze `active`
 najde len par hracov - je to ocakavane.
 
 ## Premenne prostredia

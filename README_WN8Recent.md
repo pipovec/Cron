@@ -39,12 +39,16 @@ psql -d clan -f sql/003_wn8player_recent.sql
 ./bin/PlayersVehicleSnapshot        # jednorazovo, ~1 h; da sa prerusit a znova spustit
 ```
 
-Potom cron (po bootstrape):
+Potom cron (po bootstrape): `PlayersVehicleDelta` a `PlayersWN8Recent` bezia v nocnom retazci
+`scripts/nightly_chain.sh` (denne 02:15) hned po `PlayersStatAll`:
 
 ```
-20 10 * * * cd .../crons && ./bin/PlayersVehicleDelta  > .../PlayersVehicleDelta.txt 2>&1
-00 11 * * * cd .../crons && ./bin/PlayersWN8Recent     > .../PlayersWN8Recent.txt 2>&1
+15 02 * * * /home/deamon/projects/crons/scripts/nightly_chain.sh
 ```
+
+Poradie: `PlayersStatAll` (okrem pondelka) -> `PlayersVehicleDelta` -> `PlayersWN8Recent` ->
+`PlayersVehicleStat active` -> `PlayersWN8v2`. Kazdy krok zacne az po skonceni predchadzajuceho (historia musi byt
+zapisana, kym ju cita Delta). Priebeh je v `/home/deamon/outputs/C++/NightlyChain.txt`.
 
 Okno N dni je platne az ked je k dispozicii N dni dennych delt od prveho behu `PlayersVehicleDelta`.
 Dovtedy hracov s neuplnym oknom vyradi `WN8R_MIN_COVERAGE`.
