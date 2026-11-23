@@ -22,7 +22,7 @@ PROGRAMS := Players PlayersInfo2 PlayersStatAll PlayersStatNaborNew \
 STAT_LIBS := lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerStatProcessor.cpp
 
 # Pre kazdy program: <Name>_SRCS, <Name>_LDLIBS, volitelne <Name>_CXXFLAGS
-Players_SRCS  := src/Players.cpp lib/Pgsql.cpp lib/SendCurl.cpp lib/QueryBuilder.cpp lib/PlayerProcessor.cpp
+Players_SRCS  := src/Players.cpp lib/Pgsql.cpp lib/SendCurl.cpp lib/QueryBuilder.cpp lib/PlayerProcessor.cpp lib/PlayerNick.cpp
 Players_LDLIBS := -lpq -lcurl -lpthread
 
 PlayersInfo2_SRCS   := src/PlayersInfo2.cpp lib/Pgsql.cpp lib/SendCurl.cpp

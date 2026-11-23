@@ -1,5 +1,6 @@
 #include "PlayerProcessor.h"
 #include "SendCurl.h"
+#include "PlayerNick.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -410,21 +411,10 @@ void Spracuj::nie_je_v_klane_members_role(int account_id)
 
 void Spracuj::zmena_nick_players_all(const std::string& old_name, const std::string& new_name, int account_id)
 {
-    PGresult* result;
-
-    std::string q1 = "INSERT INTO players_nick (account_id,nick) VALUES (" + std::to_string(account_id) + ",'" + old_name + "')";
-    result = PQexec(permanent_connection, q1.c_str());
-    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-        std::cout << "Chyba INSERT players_nick " << PQresultErrorMessage(result) << std::endl;
+    // Uvolni nick u zastaranych uctov, zapise historiu a zmeni nick v jednej transakcii
+    if (!PlayerNick::Rename(permanent_connection, account_id, old_name, new_name)) {
+        return; // chyba je uz vypisana; zmena sa skusi znova pri dalsom behu
     }
-    PQclear(result);
-
-    std::string q2 = "UPDATE players_all SET nickname = '" + new_name + "' WHERE account_id = " + std::to_string(account_id);
-    result = PQexec(permanent_connection, q2.c_str());
-    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-        std::cout << "Chyba UPDATE nick in players_all " << PQresultErrorMessage(result) << std::endl;
-    }
-    PQclear(result);
 
     stat.change_nick++;
 }
@@ -455,14 +445,10 @@ void Spracuj::novy_v_klane_players_all(int account_id, int clan_id, const std::s
     PQclear(result);
 
     if (rows == 0) {
-        std::string i1 = "INSERT INTO players_all (account_id,clan_id,nickname) VALUES (" +
-                         std::to_string(account_id) + "," + std::to_string(clan_id) + ",'" + account_name + "')";
-        result = PQexec(permanent_connection, i1.c_str());
-        if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-            std::cout << "Chyba insert players_all " << PQresultErrorMessage(result) << std::endl;
+        // Nick sa najprv uvolni u zastaranych uctov (UNIQUE na players_all.nickname)
+        if (PlayerNick::InsertPlayer(permanent_connection, account_id, clan_id, account_name)) {
+            stat.new_account_id++;
         }
-        PQclear(result);
-        stat.new_account_id++;
     }
     else {
         std::string u1 = "UPDATE players_all SET clan_id = " + std::to_string(clan_id) + " WHERE account_id = " + std::to_string(account_id);
