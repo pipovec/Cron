@@ -24,7 +24,8 @@ Programy: `Players`, `PlayersInfo2`, `PlayersStatAll`, `PlayersStatNaborNew`,
 `PlayersStatAktualneOdchody`, `PlayersStatAktualneOdchodyPl`,
 `PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`, `Vehicles`,
 `PlayersVehicleSnapshot`, `PlayersVehicleDelta`, `PlayersWN8Recent`
-(WN8 za 7/14/28 dni, pozri [README_WN8Recent.md](README_WN8Recent.md)).
+(WN8 za 7/14/28 dni, pozri [README_WN8Recent.md](README_WN8Recent.md)),
+`PlayersVehicleStat` (stav hracov po tankoch, pozri [README_VehicleStat.md](README_VehicleStat.md)).
 
 ## Konfiguracia
 
