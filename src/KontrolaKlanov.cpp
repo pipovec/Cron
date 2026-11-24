@@ -159,6 +159,9 @@ public:
         std::cout << std::endl << "Ukladam posledne zmeny..." << std::endl;
         processor_.FlushBatches();
 
+        // Az po kompletnom stiahnuti vsetkych stran (chyba API vyhodi vynimku a sem sa nedostane)
+        processor_.UnmarkActiveClans();
+
         std::cout << std::endl << "Kontrolujem neaktivne/rozpustene klany..." << std::endl;
         int inactive_count = processor_.GetInactiveClansCount();
         if (inactive_count > 0) {

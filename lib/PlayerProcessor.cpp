@@ -6,6 +6,9 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <sstream>
+#include <vector>
+#include <nlohmann/json.hpp>
 
 namespace PlayerProcessing
 {
@@ -21,6 +24,8 @@ void Statistika::Print() const
     std::cout << "Zmeny nickov \t\t" << change_nick << std::endl;
     std::cout << "Zmeny roly \t\t" << change_role << std::endl;
     std::cout << "Ukoncene klany \t\t" << empty_clan << std::endl;
+    std::cout << "Rozpustene (uzavrete)\t" << empty_clans_closed << " klanov, " << empty_rows_closed << " zaznamov" << std::endl;
+    std::cout << "Odznacene zive klany\t" << empty_clans_unmarked << std::endl;
 }
 
 void Statistika::Reset()
@@ -35,6 +40,9 @@ void Statistika::Reset()
     players_left = 0;
     clans_processed = 0;
     players_checked = 0;
+    empty_clans_closed = 0;
+    empty_rows_closed = 0;
+    empty_clans_unmarked = 0;
 }
 
 // Pomocne funkcie
@@ -90,6 +98,111 @@ void SendPost(const std::string& clan_id, std::string* json)
             x = 1;
         }
     } while (x != 0);
+}
+
+namespace
+{
+// int pole ako PostgreSQL literal {1,2,3}
+std::string IntArrayLiteral(const std::vector<int>& ids)
+{
+    std::ostringstream out;
+    out << '{';
+    for (size_t i = 0; i < ids.size(); ++i) {
+        if (i) out << ',';
+        out << ids[i];
+    }
+    out << '}';
+    return out.str();
+}
+
+int ExecWithIntArray(PGconn* conn, const char* query, const std::vector<int>& ids)
+{
+    std::string arr = IntArrayLiteral(ids);
+    const char* params[1] = { arr.c_str() };
+    PGresult* res = PQexecParams(conn, query, 1, nullptr, params, nullptr, nullptr, 0);
+    int affected = 0;
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::cerr << "Chyba SkontrolujPrazdneKlany: " << PQresultErrorMessage(res) << std::endl;
+        affected = -1;
+    } else {
+        affected = std::atoi(PQcmdTuples(res));
+    }
+    PQclear(res);
+    return affected;
+}
+} // namespace
+
+void SkontrolujPrazdneKlany(PGconn* conn, Statistika& stat)
+{
+    // clan_all_empty plnia Players (clan_is_empty) aj KontrolaKlanov (rozpustene / chybajuce v
+    // clans/list). Klan v nej sa uz nespracuva, takze bez tohto kroku by otvorene zaznamy jeho
+    // clenov ostali otvorene navzdy a odchody z rozpusteneho klanu by sa nikdy neukazali.
+    PGresult* res = PQexec(conn,
+        "SELECT DISTINCT m.clan_id FROM members_role m JOIN clan_all_empty e USING (clan_id)"
+        " WHERE m.dokedy IS NULL ORDER BY 1");
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        std::cerr << "Chyba SELECT clan_all_empty: " << PQresultErrorMessage(res) << std::endl;
+        PQclear(res);
+        return;
+    }
+    std::vector<int> ids;
+    for (int i = 0; i < PQntuples(res); ++i) {
+        ids.push_back(std::atoi(PQgetvalue(res, i, 0)));
+    }
+    PQclear(res);
+    if (ids.empty()) return;
+
+    std::vector<int> dead, alive;
+    SendCurl send;
+    for (size_t i = 0; i < ids.size(); i += 100) {
+        std::ostringstream list;
+        for (size_t j = i; j < ids.size() && j < i + 100; ++j) {
+            if (j > i) list << ',';
+            list << ids[j];
+        }
+        std::string post = "&fields=clan_id,members_count,is_clan_disbanded&clan_id=" + list.str();
+        nlohmann::json js;
+        try {
+            js = nlohmann::json::parse(send.SendWGN("/clans/info/", post));
+        }
+        catch (const std::exception& e) {
+            // Pri chybe API radsej nic nemenit - skusi sa pri dalsom behu
+            std::cerr << "SkontrolujPrazdneKlany: chyba API, preskakujem: " << e.what() << std::endl;
+            return;
+        }
+        if (js.value("status", "") != "ok" || !js.contains("data")) {
+            std::cerr << "SkontrolujPrazdneKlany: neplatna odpoved API, preskakujem" << std::endl;
+            return;
+        }
+        for (size_t j = i; j < ids.size() && j < i + 100; ++j) {
+            std::string key = std::to_string(ids[j]);
+            if (!js["data"].contains(key)) continue;   // nevieme -> nemenit
+            const auto& c = js["data"][key];
+            bool is_dead = c.is_null()
+                || c.value("is_clan_disbanded", false)
+                || !c.contains("members_count") || c["members_count"].is_null()
+                || c["members_count"].get<int>() == 0;
+            (is_dead ? dead : alive).push_back(ids[j]);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (!dead.empty()) {
+        int rows = ExecWithIntArray(conn,
+            "UPDATE members_role SET dokedy = GREATEST(odkedy, current_date)"
+            " WHERE clan_id = ANY($1::int[]) AND dokedy IS NULL", dead);
+        ExecWithIntArray(conn, "UPDATE players_all SET clan_id = 0 WHERE clan_id = ANY($1::int[])", dead);
+        if (rows > 0) {
+            stat.empty_clans_closed += static_cast<int>(dead.size());
+            stat.empty_rows_closed += rows;
+        }
+    }
+    if (!alive.empty()) {
+        int rows = ExecWithIntArray(conn, "DELETE FROM clan_all_empty WHERE clan_id = ANY($1::int[])", alive);
+        if (rows > 0) stat.empty_clans_unmarked += rows;
+    }
+    std::cout << "Prazdne klany s otvorenymi zaznamami: " << ids.size()
+              << " (rozpustene " << dead.size() << ", zive " << alive.size() << ")" << std::endl;
 }
 
 void ClearArray(int a_clan_id[100])

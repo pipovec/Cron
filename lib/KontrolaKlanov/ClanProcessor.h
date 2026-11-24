@@ -42,6 +42,7 @@ private:
     vector<ClanData> insert_batch;
     vector<ClanData> update_batch;
     vector<string> disbanded_clans;  // Rozpustene klany (iba clan_id v API)
+    vector<string> active_clans;     // Klany s datami a members_count > 0 (na odznacenie z clan_all_empty)
 
     mutex batch_mutex;
 
@@ -71,6 +72,9 @@ public:
 
     // Oznaci klany ktore uz neexistuju v API ako neaktivne
     void MarkInactiveClans();
+
+    // Odstrani z clan_all_empty klany, ktore prisli z API s clenmi (omylom oznacene ako prazdne)
+    void UnmarkActiveClans();
 
     // Ziska pocet neaktivnych klanov
     int GetInactiveClansCount() const;

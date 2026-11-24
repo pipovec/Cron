@@ -80,6 +80,9 @@ void ClanProcessor::ProcessJsonData(const string& json_string, vector<ClanData>&
         clan.EscapeName();
 
         clan.members_count = to_string(j["members_count"].get<int>());
+        if (j["members_count"].get<int>() > 0) {
+            active_clans.push_back(clan_id);
+        }
         clan.emblem195 = j["emblems"]["x195"]["portal"].get<string>();
         clan.emblem64 = j["emblems"]["x64"]["portal"].get<string>();
         clan.emblem32 = j["emblems"]["x32"]["portal"].get<string>();
@@ -272,6 +275,31 @@ void ClanProcessor::MarkInactiveClans() {
         cout << "  - Chybaju v API: " << missing_clans.size() << endl;
     }
 
+    PQclear(result);
+}
+
+void ClanProcessor::UnmarkActiveClans() {
+    // clan_all_empty sa predtym len plnila (ON CONFLICT DO NOTHING). Klan omylom oznaceny ako
+    // prazdny (napr. hromadne 2016-12-19) Players uz nikdy nespracoval, hoci zil a mal clenov.
+    if (active_clans.empty()) return;
+
+    string arr = "{";
+    for (size_t i = 0; i < active_clans.size(); i++) {
+        if (i) arr += ",";
+        arr += active_clans[i];
+    }
+    arr += "}";
+
+    const char* params[1] = { arr.c_str() };
+    PGresult* result = PQexecParams(conn,
+        "DELETE FROM clan_all_empty WHERE clan_id = ANY($1::int[])",
+        1, nullptr, params, nullptr, nullptr, 0);
+
+    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+        cerr << "Chyba pri odznacovani aktivnych klanov: " << PQresultErrorMessage(result) << endl;
+    } else {
+        cout << "Odznacene z clan_all_empty (klany s clenmi v API): " << PQcmdTuples(result) << endl;
+    }
     PQclear(result);
 }
 

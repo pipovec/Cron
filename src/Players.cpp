@@ -90,6 +90,9 @@ int main(int argc, char* argv[])
     stat.Reset();
 
     // Ziskaj vsetky clan_id
+    // Rozpustene klany z clan_all_empty -> uzavriet members_role; omylom oznacene zive -> odznacit
+    SkontrolujPrazdneKlany(permanent_connection, stat);
+
     ClanQueue cids;
     std::string query = queryBuilder->GetClanIdQuery();
     GetClanId(&cids, permanent_connection, query);
@@ -149,6 +152,8 @@ int main(int argc, char* argv[])
          << " Nicky=" << stat.change_nick
          << " Roly=" << stat.change_role
          << " Ukoncene=" << stat.empty_clan
+         << " RozpusteneZaznamy=" << stat.empty_rows_closed
+         << " Odznacene=" << stat.empty_clans_unmarked
          << " Updaty=0"
          << " Inserty=0"
          << " Spracovane=" << stat.players_checked

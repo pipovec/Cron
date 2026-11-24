@@ -30,6 +30,9 @@ struct Statistika {
     int players_left = 0;
     int clans_processed = 0;
     int players_checked = 0;
+    int empty_clans_closed = 0;    // rozpustene klany z clan_all_empty, ktorym sa uzavrel members_role
+    int empty_rows_closed = 0;     // pocet takto uzavretych zaznamov members_role
+    int empty_clans_unmarked = 0;  // zive klany odstranene z clan_all_empty
 
     void Print() const;
     void Reset();
@@ -91,6 +94,13 @@ void GetClanId(ClanQueue* p_aids, PGconn* permanent_connection, const std::strin
 void Get100Id(std::string* p_clan_id, ClanQueue* p_aids, int a_clan_id[100]);
 void SendPost(const std::string& clan_id, std::string* json);
 void ClearArray(int a_clan_id[100]);
+
+// Klany v clan_all_empty, ktore maju otvorene zaznamy v members_role, overi cez WG API:
+//  - rozpusteny / null / 0 clenov -> uzavrie members_role dnesnym dnom (odchod na /odchody),
+//    players_all.clan_id = 0
+//  - zivy -> odstrani ho z clan_all_empty, aby ho Players znova spracoval
+// Volat pred vyberom klanov (GetClanId), aby sa odznacene klany spracovali uz v tomto behu.
+void SkontrolujPrazdneKlany(PGconn* conn, Statistika& stat);
 
 // Prepared statements
 void PreparedSelectPlayersAll(PGconn* conn);
