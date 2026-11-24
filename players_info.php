@@ -13,7 +13,7 @@ class json3 {
     
     private $server         = "https://api.worldoftanks.eu/wot";
     private $server2        = "https://api.worldoftanks.eu/wgn";
-    private $api_id         = 'c428e2923f3d626de8cbcb3938bb68f8';
+    private $api_id         = '';  // WG_APPLICATION_ID z prostredia (pozri konstruktor)
     private $language       = 'cs';
         private function SendRequest($method, $fields_string)
         {
@@ -189,6 +189,7 @@ class Database {
     public $ins_counter = 0;
    
     function __construct () {
+        $this->api_id = (string) getenv('WG_APPLICATION_ID');
         $this->Connection();         
         $this->PrepareStm();
         $this->PrepareUpd();

@@ -22,6 +22,11 @@ SendCurl::SendCurl()
     // curl_global_init nie je thread-safe; C++11 zaruci jedno bezpecne vykonanie
     static const CURLcode kGlobalInit = curl_global_init(CURL_GLOBAL_DEFAULT);
     (void)kGlobalInit;
+
+    if (api_id == "application_id=")
+    {
+        std::cerr << "Chyba: WG_APPLICATION_ID nie je nastavene (.env alebo premenna prostredia)" << std::endl;
+    }
 }
 
 void SendCurl::ResetHandle()

@@ -82,6 +82,41 @@ namespace DbConfig
         }
     }
 
+    // Nacita vsetky KEY=VALUE z .env suboru (komentare #, volitelne "export ", uvodzovky)
+    inline std::unordered_map<std::string, std::string> LoadKV(const std::string& path)
+    {
+        std::unordered_map<std::string, std::string> kv;
+        std::ifstream file(path);
+        std::string line;
+        while (std::getline(file, line)) {
+            std::string trimmed = detail::Trim(line);
+            if (trimmed.empty() || trimmed[0] == '#') continue;
+            if (trimmed.rfind("export ", 0) == 0) {
+                trimmed = detail::Trim(trimmed.substr(7));
+            }
+            size_t eq = trimmed.find('=');
+            if (eq == std::string::npos) continue;
+            std::string key = detail::Trim(trimmed.substr(0, eq));
+            if (!key.empty()) {
+                kv[key] = detail::StripQuotes(detail::Trim(trimmed.substr(eq + 1)));
+            }
+        }
+        return kv;
+    }
+
+    // Hodnota konfiguracie: premenna prostredia ma prednost, inak .env (DB_CONFIG_PATH), inak def.
+    // Napr. WG_APPLICATION_ID, MONGODB_URL.
+    inline std::string Get(const std::string& key, const std::string& def = "")
+    {
+        const char* env = std::getenv(key.c_str());
+        if (env && *env) {
+            return std::string(env);
+        }
+        static const std::unordered_map<std::string, std::string> kv = LoadKV(GetConfigPath());
+        auto it = kv.find(key);
+        return (it != kv.end() && !it->second.empty()) ? it->second : def;
+    }
+
     inline std::string LoadConninfo(const std::string& path, const std::string& fallback)
     {
         std::ifstream file(path);

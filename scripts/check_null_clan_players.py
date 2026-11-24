@@ -39,11 +39,16 @@ API = "https://api.worldoftanks.eu/wot/account/info/"
 def app_id():
     if os.environ.get("WOT_APP_ID"):
         return os.environ["WOT_APP_ID"]
-    src = open(os.path.join(ROOT, "lib", "SendCurl.h"), encoding="utf-8").read()
-    m = re.search(r'api_id\s*=\s*"application_id=([0-9a-f]+)"', src)
-    if not m:
-        sys.exit("Nenasiel som application_id (nastav WOT_APP_ID)")
-    return m.group(1)
+    # WG_APPLICATION_ID z .env projektu (rovnako ako C++ programy)
+    try:
+        with open(os.path.join(ROOT, ".env"), encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r'\s*(?:export\s+)?WG_APPLICATION_ID\s*=\s*["\']?([^"\'\s]+)', line)
+                if m:
+                    return m.group(1)
+    except OSError:
+        pass
+    sys.exit("Nenasiel som WG_APPLICATION_ID v .env (alebo nastav WOT_APP_ID)")
 
 
 def psql(sql):

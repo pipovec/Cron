@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "./CronLog.h"
+#include "./DbConfig.h"
 #include "./Pgsql.h"
 #include "./SendCurl.h"
 #include <nlohmann/json.hpp>
@@ -167,10 +168,11 @@ static void SendPost(SendCurl &send, const string &aids, string *json, bool mong
 // dokumentov, pocas behu sa zmenene dokumenty posielaju ako Extended JSON do rury
 // "mongoimport --mode=upsert" (nahradi cely dokument podla _id). Zapisuje sa len hrac,
 // ktoremu sa zmenil WG updated_at alebo v Mongo este nie je (rovnako ako PHP).
-// Prihlasenie (uri) je v YAML pre --config, aby heslo nebolo vidiet v zozname procesov.
+// Pripojenie: MONGODB_URL z .env (alebo premennej prostredia). Nastrojom sa odovzda cez
+// docasny YAML pre --config (mkstemp, 0600, po behu sa zmaze), aby heslo nebolo vidiet
+// v zozname procesov.
 //   PLAYERSSTAT_NOMONGO=1  zapis do Mongo vypne
 //   MONGO_FULL=1           zapise vsetkych hracov bez ohladu na updated_at
-//   MONGO_TOOLS_CONFIG     cesta ku konfiguracii (default ~/.config/crons/mongodb.yaml)
 //   MONGO_COLLECTION       ina kolekcia namiesto player-stats (testovanie)
 class MongoSync
 {
@@ -180,17 +182,26 @@ public:
 
     bool Enabled() const { return pipe_ != nullptr; }
 
+    MongoSync() = default;
+    MongoSync(const MongoSync &) = delete;
+    MongoSync &operator=(const MongoSync &) = delete;
+    ~MongoSync()
+    {
+        if (pipe_ != nullptr)
+            pclose(pipe_);
+        RemoveTempConfig();
+    }
+
     bool Open()
     {
-        const char *cfg_env = std::getenv("MONGO_TOOLS_CONFIG");
-        const char *home = std::getenv("HOME");
-        config_ = cfg_env && *cfg_env ? string(cfg_env)
-                                      : string(home ? home : "") + "/.config/crons/mongodb.yaml";
-        if (access(config_.c_str(), R_OK) != 0)
+        const string uri = DbConfig::Get("MONGODB_URL");
+        if (uri.empty())
         {
-            cout << "Mongo: konfiguracia " << config_ << " neexistuje - zapis do Mongo vypnuty" << endl;
+            cout << "Mongo: MONGODB_URL nie je nastavene (.env) - zapis do Mongo vypnuty" << endl;
             return false;
         }
+        if (!WriteTempConfig(uri))
+            return false;
         const char *full = std::getenv("MONGO_FULL");
         full_ = full && *full && *full != '0';
 
@@ -266,6 +277,7 @@ public:
             return !failed_;
         int rc = pclose(pipe_);
         pipe_ = nullptr;
+        RemoveTempConfig();
         if (rc != 0)
         {
             cout << "Mongo: mongoimport skoncil s chybou (rc=" << rc << ")" << endl;
@@ -278,8 +290,50 @@ private:
     FILE *pipe_ = nullptr;
     bool full_ = false;
     bool failed_ = false;
-    string config_;
+    string config_; // cesta k docasnemu YAML s uri
     unordered_map<long long, long long> updated_at_;
+
+    // Docasny YAML pre --config mongoexport/mongoimport (subor 0600 z mkstemp)
+    bool WriteTempConfig(const string &uri)
+    {
+        const char *tmpdir = std::getenv("TMPDIR");
+        string tmpl = string(tmpdir && *tmpdir ? tmpdir : "/tmp") + "/mongotools-XXXXXX";
+        vector<char> path(tmpl.begin(), tmpl.end());
+        path.push_back('\0');
+        int fd = mkstemp(path.data());
+        if (fd < 0)
+        {
+            cout << "Mongo: docasnu konfiguraciu sa nepodarilo vytvorit - zapis do Mongo vypnuty" << endl;
+            return false;
+        }
+        config_ = path.data();
+
+        string escaped;
+        for (char ch : uri)
+        {
+            if (ch == '\\' || ch == '"')
+                escaped += '\\';
+            escaped += ch;
+        }
+        const string content = "uri: \"" + escaped + "\"\n";
+        const bool ok = write(fd, content.data(), content.size()) == static_cast<ssize_t>(content.size());
+        close(fd);
+        if (!ok)
+        {
+            cout << "Mongo: zapis docasnej konfiguracie zlyhal - zapis do Mongo vypnuty" << endl;
+            RemoveTempConfig();
+        }
+        return ok;
+    }
+
+    void RemoveTempConfig()
+    {
+        if (!config_.empty())
+        {
+            unlink(config_.c_str());
+            config_.clear();
+        }
+    }
 
     // MONGO_COLLECTION prepise cielovu kolekciu (na testovanie), povolene len [A-Za-z0-9_-]
     static string Collection()

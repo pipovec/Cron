@@ -29,7 +29,15 @@ Programy: `Players`, `PlayersInfo2`, `PlayersStatAll`, `PlayersStatNaborNew`,
 
 ## Konfiguracia
 
-Skopiruj `.env.example` do `.env` a vypln pripojenie k databaze (`PG*`).
+Skopiruj `.env.example` do `.env` (prava `chmod 600 .env`, subor je v `.gitignore`) a vypln:
+
+- `PG*` – pripojenie k PostgreSQL
+- `WG_APPLICATION_ID` – kluc k WoT API (developers.wargaming.net), pouziva ho `SendCurl`
+- `MONGODB_URL` – MongoDB pre `PlayersStatAll` (dokumenty `fpcstat.player-stats`); `mongoexport`/`mongoimport`
+  ho dostanu cez docasny konfiguracny subor, takze heslo nie je vidiet v zozname procesov
+
+Subor sa hlada v aktualnom adresari, alebo podla `DB_CONFIG_PATH`. Premenna prostredia s rovnakym nazvom
+ma prednost pred `.env`. Programy sa preto spustaju z korena projektu (`cd ~/projects/crons && ./bin/...`).
 
 ## CI
 

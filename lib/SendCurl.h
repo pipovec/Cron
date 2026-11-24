@@ -4,6 +4,7 @@
 #include <iostream>
 #include <curl/curl.h>
 #include <unistd.h> // sleep()
+#include "./DbConfig.h"
 
 
 using namespace std;
@@ -34,9 +35,10 @@ class SendCurl
             bool SkontrolujStatus(string data);
             void ResetHandle();
             CURL *curl_ = nullptr;   // znovupouzivany handle, vytvori sa pri prvom requeste
-            const string server_wgn   = "http://api.worldoftanks.eu/wgn";
-            const string server_wot   = "http://api.worldoftanks.eu/wot"; 
-            const string api_id       = "application_id=c428e2923f3d626de8cbcb3938bb68f8";
+            const string server_wgn   = "https://api.worldoftanks.eu/wgn";
+            const string server_wot   = "https://api.worldoftanks.eu/wot"; 
+            // WG application_id z .env (WG_APPLICATION_ID) alebo z premennej prostredia
+            const string api_id       = "application_id=" + DbConfig::Get("WG_APPLICATION_ID");
             
             
             
