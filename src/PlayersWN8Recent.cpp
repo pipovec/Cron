@@ -88,10 +88,10 @@ static std::string Num(double v)
 // Agregacia za jedno obdobie. Vracia false pri chybe dotazu.
 static bool LoadPeriod(PGconn *conn, const std::string &end_date, int days, long long min_battles,
                        double min_coverage, std::vector<Row> *rows, long long *candidates,
-                       long long *low_battles, long long *low_coverage)
+                       long long *low_battles, long long *low_coverage, long long *low_expected)
 {
     rows->clear();
-    *candidates = *low_battles = *low_coverage = 0;
+    *candidates = *low_battles = *low_coverage = *low_expected = 0;
 
     const std::string days_s = std::to_string(days);
     const char *params[2] = {end_date.c_str(), days_s.c_str()};
@@ -107,11 +107,13 @@ static bool LoadPeriod(PGconn *conn, const std::string &end_date, int days, long
         "  SELECT dd.account_id, sum(dd.battles)::bigint AS tb,"
         "         coalesce(sum(e.dmg  * dd.battles), 0) AS ed, coalesce(sum(e.spot * dd.battles), 0) AS es,"
         "         coalesce(sum(e.frag * dd.battles), 0) AS ef, coalesce(sum(e.def  * dd.battles), 0) AS edf,"
-        "         coalesce(sum(0.01 * e.win * dd.battles), 0) AS ew"
+        "         coalesce(sum(0.01 * e.win * dd.battles), 0) AS ew,"
+        "         coalesce(sum(dd.battles) FILTER (WHERE e.tank_id IS NOT NULL), 0)::bigint AS eb,"
+        "         coalesce(sum(dd.wins)    FILTER (WHERE e.tank_id IS NULL), 0)::bigint AS uw"
         "  FROM player_vehicle_daily dd LEFT JOIN expected_tank_value e ON e.tank_id = dd.tank_id"
         "  WHERE dd.date BETWEEN $1::date - ($2::int - 1) AND $1::date GROUP BY dd.account_id"
         ") "
-        "SELECT h.account_id, h.b, d.tb, h.w, h.dmg, h.sp, h.fr, h.df, d.ed, d.es, d.ef, d.edf, d.ew "
+        "SELECT h.account_id, h.b, d.tb, h.w, h.dmg, h.sp, h.fr, h.df, d.ed, d.es, d.ef, d.edf, d.ew, d.eb, d.uw "
         "FROM h JOIN d ON d.account_id = h.account_id ORDER BY h.account_id",
         2, nullptr, params, nullptr, nullptr, 0);
 
@@ -144,12 +146,24 @@ static bool LoadPeriod(PGconn *conn, const std::string &end_date, int days, long
             continue;
         }
 
+        // Tanky bez ocakavanych hodnot (expected_tank_value) nema z coho vyhodnotit. Ak ich je viac nez
+        // (100 - min_coverage) % bitiek, hrac sa vyradi. Inak sa ich bitky a vyhry odpocitaju presne a
+        // damage/spot/frags/def (v historii len sucet za hraca, nie po tankoch) sa znizia pomerne.
+        long long exp_battles = std::stoll(PQgetvalue(result, i, 13));
+        double exp_coverage = 100.0 * static_cast<double>(exp_battles) / static_cast<double>(battles);
+        if (exp_coverage < min_coverage)
+        {
+            (*low_expected)++;
+            continue;
+        }
+        const double share = std::min(1.0, static_cast<double>(exp_battles) / static_cast<double>(battles));
+
         Wn8::Totals actual, expected;
-        actual.wins = std::stod(PQgetvalue(result, i, 3));
-        actual.dmg = std::stod(PQgetvalue(result, i, 4));
-        actual.spot = std::stod(PQgetvalue(result, i, 5));
-        actual.frags = std::stod(PQgetvalue(result, i, 6));
-        actual.def = std::stod(PQgetvalue(result, i, 7));
+        actual.wins = std::max(0.0, std::stod(PQgetvalue(result, i, 3)) - std::stod(PQgetvalue(result, i, 14)));
+        actual.dmg = std::stod(PQgetvalue(result, i, 4)) * share;
+        actual.spot = std::stod(PQgetvalue(result, i, 5)) * share;
+        actual.frags = std::stod(PQgetvalue(result, i, 6)) * share;
+        actual.def = std::stod(PQgetvalue(result, i, 7)) * share;
         expected.dmg = std::stod(PQgetvalue(result, i, 8));
         expected.spot = std::stod(PQgetvalue(result, i, 9));
         expected.frags = std::stod(PQgetvalue(result, i, 10));
@@ -322,15 +336,15 @@ int main()
     for (int days : periods)
     {
         std::vector<Row> rows;
-        long long candidates, low_battles, low_coverage;
-        if (!LoadPeriod(conn, end_date, days, min_battles, min_coverage, &rows, &candidates, &low_battles, &low_coverage))
+        long long candidates, low_battles, low_coverage, low_expected;
+        if (!LoadPeriod(conn, end_date, days, min_battles, min_coverage, &rows, &candidates, &low_battles, &low_coverage, &low_expected))
         {
             failed = true;
             continue;
         }
 
         std::cout << days << " dni: hracov s dennymi prirastkami " << candidates << ", malo bitiek " << low_battles
-                  << ", nizke pokrytie " << low_coverage << ", vysledkov " << rows.size() << std::endl;
+                  << ", nizke pokrytie " << low_coverage << ", bez ocakavanych hodnot " << low_expected << ", vysledkov " << rows.size() << std::endl;
         PrintDistribution(rows);
         info << " P" << days << "=" << rows.size();
 
