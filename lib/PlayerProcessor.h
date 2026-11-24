@@ -33,6 +33,7 @@ struct Statistika {
     int empty_clans_closed = 0;    // rozpustene klany z clan_all_empty, ktorym sa uzavrel members_role
     int empty_rows_closed = 0;     // pocet takto uzavretych zaznamov members_role
     int empty_clans_unmarked = 0;  // zive klany odstranene z clan_all_empty
+    int skipped_clans = 0;         // klany preskocene, lebo WG API pre ne trvalo vracia chybu
 
     void Print() const;
     void Reset();
@@ -92,7 +93,10 @@ private:
 // Pomocne funkcie
 void GetClanId(ClanQueue* p_aids, PGconn* permanent_connection, const std::string& query);
 void Get100Id(std::string* p_clan_id, ClanQueue* p_aids, int a_clan_id[100]);
-void SendPost(const std::string& clan_id, std::string* json);
+// max_attempts <= 0 = opakovat donekonecna; vrati false, ak vsetky pokusy zlyhali
+bool SendPost(const std::string& clan_id, std::string* json, int max_attempts = 0);
+// SendPost pre davku 100 klanov; klany, pre ktore WG trvalo vracia chybu, z davky vyradi
+void SendPostBatch(std::string* clan_id, int a_clan_id[100], std::string* json, Statistika& stat);
 void ClearArray(int a_clan_id[100]);
 
 // Klany v clan_all_empty, ktore maju otvorene zaznamy v members_role, overi cez WG API:

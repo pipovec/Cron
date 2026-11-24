@@ -110,7 +110,7 @@ int main(int argc, char* argv[])
         Get100Id(&clan_id, &cids, a_clan_id);
 
         // Poslem udaje na server
-        SendPost(clan_id, &json);
+        SendPostBatch(&clan_id, a_clan_id, &json, stat);
 
         // Spracuj data
         auto doit = std::make_unique<Spracuj>(a_clan_id, json, permanent_connection, stat);
@@ -154,6 +154,7 @@ int main(int argc, char* argv[])
          << " Ukoncene=" << stat.empty_clan
          << " RozpusteneZaznamy=" << stat.empty_rows_closed
          << " Odznacene=" << stat.empty_clans_unmarked
+         << " Preskocene=" << stat.skipped_clans
          << " Updaty=0"
          << " Inserty=0"
          << " Spracovane=" << stat.players_checked

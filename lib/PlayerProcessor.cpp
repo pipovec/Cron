@@ -26,6 +26,7 @@ void Statistika::Print() const
     std::cout << "Ukoncene klany \t\t" << empty_clan << std::endl;
     std::cout << "Rozpustene (uzavrete)\t" << empty_clans_closed << " klanov, " << empty_rows_closed << " zaznamov" << std::endl;
     std::cout << "Odznacene zive klany\t" << empty_clans_unmarked << std::endl;
+    std::cout << "Preskocene klany (API)\t" << skipped_clans << std::endl;
 }
 
 void Statistika::Reset()
@@ -43,6 +44,7 @@ void Statistika::Reset()
     empty_clans_closed = 0;
     empty_rows_closed = 0;
     empty_clans_unmarked = 0;
+    skipped_clans = 0;
 }
 
 // Pomocne funkcie
@@ -77,27 +79,58 @@ void Get100Id(std::string* p_clan_id, ClanQueue* p_aids, int a_clan_id[100])
     }
 }
 
-void SendPost(const std::string& clan_id, std::string* json)
+bool SendPost(const std::string& clan_id, std::string* json, int max_attempts)
 {
     const char text[] = "&fields=clan_id,members_count,members.account_id,members.account_name,members.joined_at,members.role_i18n&language=cs";
     const std::string method = "/clans/info/";
     std::string post_data = std::string(text) + "&clan_id=" + clan_id;
 
     SendCurl send;
-    int x = 1;
     std::chrono::seconds dura(3);
 
-    do {
+    for (int attempt = 1; max_attempts <= 0 || attempt <= max_attempts; ++attempt) {
         try {
             *json = send.SendWGN(method, post_data);
-            x = 0;
+            return true;
         }
         catch (std::exception& e) {
             std::cout << e.what() << std::endl;
             std::this_thread::sleep_for(dura);
-            x = 1;
         }
-    } while (x != 0);
+    }
+    return false;
+}
+
+void SendPostBatch(std::string* clan_id, int a_clan_id[100], std::string* json, Statistika& stat)
+{
+    // WG pri niektorych klanoch trvalo vracia chybu (napr. 504 SOURCE_NOT_AVAILABLE pre konkretny
+    // clan_id) a cela davka 100 klanov potom zlyhava. Predtym sa davka opakovala donekonecna a beh
+    // ALL sa zasekol. Teraz sa po 5 pokusoch davka rozlozi po jednom klane; klany, ktore zlyhaju aj
+    // samostatne, sa v tomto behu preskocia (neoznacia sa ako prazdne - clenstvo sa nemeni).
+    // Ak zlyha kazdy klan, je nedostupne cele API - pocka sa a skusa sa dalej.
+    while (!SendPost(*clan_id, json, 5)) {
+        std::vector<int> good, bad;
+        std::string tmp;
+        for (int i = 0; i < 100 && a_clan_id[i] != 0; ++i) {
+            tmp.clear();
+            (SendPost(std::to_string(a_clan_id[i]), &tmp, 2) ? good : bad).push_back(a_clan_id[i]);
+        }
+        if (good.empty()) {
+            std::cout << "WG API nedostupne pre celu davku, cakam 60 s" << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(60));
+            continue;
+        }
+        for (int cid : bad) {
+            std::cout << "Preskakujem klan " << cid << " (WG API vracia chybu)" << std::endl;
+            stat.skipped_clans++;
+        }
+        ClearArray(a_clan_id);
+        clan_id->clear();
+        for (size_t i = 0; i < good.size(); ++i) {
+            a_clan_id[i] = good[i];
+            *clan_id += std::to_string(good[i]) + ",";
+        }
+    }
 }
 
 namespace
@@ -166,13 +199,13 @@ void SkontrolujPrazdneKlany(PGconn* conn, Statistika& stat)
             js = nlohmann::json::parse(send.SendWGN("/clans/info/", post));
         }
         catch (const std::exception& e) {
-            // Pri chybe API radsej nic nemenit - skusi sa pri dalsom behu
-            std::cerr << "SkontrolujPrazdneKlany: chyba API, preskakujem: " << e.what() << std::endl;
-            return;
+            // Pri chybe API davku nemenit - skusi sa pri dalsom behu
+            std::cerr << "SkontrolujPrazdneKlany: chyba API, preskakujem davku: " << e.what() << std::endl;
+            continue;
         }
         if (js.value("status", "") != "ok" || !js.contains("data")) {
-            std::cerr << "SkontrolujPrazdneKlany: neplatna odpoved API, preskakujem" << std::endl;
-            return;
+            std::cerr << "SkontrolujPrazdneKlany: neplatna odpoved API, preskakujem davku" << std::endl;
+            continue;
         }
         for (size_t j = i; j < ids.size() && j < i + 100; ++j) {
             std::string key = std::to_string(ids[j]);
