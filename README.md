@@ -20,7 +20,7 @@ make PlayersStatAll        # jeden program
 make clean                 # zmaze obj/
 ```
 
-Programy: `Players`, `PlayersInfo2`, `PlayersStatAll`, `PlayersStatNaborNew`,
+Programy: `Players`, `PlayersStatAll`, `PlayersStatNaborNew`,
 `PlayersStatAktualneOdchody`, `PlayersStatAktualneOdchodyPl`,
 `PlayersStatDeparturesGermany`, `PlayersWN8v2`, `KontrolaKlanov`, `Vehicles`,
 `PlayersVehicleSnapshot`, `PlayersVehicleDelta`, `PlayersWN8Recent`

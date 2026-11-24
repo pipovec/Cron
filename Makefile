@@ -14,7 +14,7 @@ CXXFLAGS += -I. -I/usr/include/postgresql -I./json/include
 BINDIR := bin
 OBJDIR := obj
 
-PROGRAMS := Players PlayersInfo2 PlayersStatAll PlayersStatNaborNew \
+PROGRAMS := Players PlayersStatAll PlayersStatNaborNew \
             PlayersStatAktualneOdchody PlayersStatAktualneOdchodyPl \
             PlayersStatDeparturesGermany PlayersWN8v2 KontrolaKlanov Vehicles \
             PlayersVehicleSnapshot PlayersVehicleDelta PlayersWN8Recent PlayersVehicleStat PlayersNickCheck
@@ -25,8 +25,6 @@ STAT_LIBS := lib/Pgsql.cpp lib/SendCurl.cpp lib/PlayerStatProcessor.cpp
 Players_SRCS  := src/Players.cpp lib/Pgsql.cpp lib/SendCurl.cpp lib/QueryBuilder.cpp lib/PlayerProcessor.cpp lib/PlayerNick.cpp
 Players_LDLIBS := -lpq -lcurl -lpthread
 
-PlayersInfo2_SRCS   := src/PlayersInfo2.cpp lib/Pgsql.cpp lib/SendCurl.cpp
-PlayersInfo2_LDLIBS := -lpq -lcurl
 
 PlayersStatAll_SRCS                    := src/PlayersStatAll.cpp $(STAT_LIBS)
 PlayersStatNaborNew_SRCS               := src/PlayersStat.cpp $(STAT_LIBS)

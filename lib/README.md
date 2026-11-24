@@ -247,7 +247,7 @@ Súbor: `lib/CronLog.h`
 #include "./lib/CronLog.h"
 
 int main() {
-    CronLog::ScopedRun run("PlayersInfo2");
+    CronLog::ScopedRun run("PlayersStatAll");
 
     // ... logika cronu ...
 
@@ -268,7 +268,7 @@ int main() {
 
     std::time_t end = std::time(nullptr);
     CronLog::Writer writer;
-    writer.Insert(start, end, "PlayersInfo2", "OK");
+    writer.Insert(start, end, "PlayersStatAll", "OK");
     return 0;
 }
 ```
