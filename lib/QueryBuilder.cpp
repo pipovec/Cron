@@ -58,9 +58,12 @@ std::string QueryBuilder::GetClanIdQuery() const
                 excludeEmpty + orderBy;
     }
     else if (processType == "ALL") {
-        // Vsetky ostatne (nie CS, DE, PL, FR)
+        // Vsetky ostatne vratane PL, FR a klanov bez jazyka (NULL) - bez klanov, ktore
+        // spracuvaju CS a DE (inak by sa spracovali dvakrat)
         query = baseQuery +
-                "language != 'cs' AND language != 'de' AND language != 'pl' AND language != 'fr'" +
+                "(language IS NULL OR language NOT IN ('cs', 'sk', 'de'))"
+                " AND clan_id NOT IN (SELECT clan_id FROM tmp_clans_cs)"
+                " AND clan_id NOT IN (SELECT clan_id FROM tmp_clans_de)" +
                 excludeEmpty + orderBy;
     }
 

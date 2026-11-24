@@ -7,7 +7,7 @@
  * Priklad:
  *   ./Players CS  - spracuje ceske a Slovenske klany
  *   ./Players DE  - spracuje nemecke klany
- *   ./Players ALL - spracuje vsetky ostatne klany
+ *   ./Players ALL - spracuje vsetky ostatne klany vratane PL, FR a bez jazyka (nie CS, DE)
  *
  * Author: Boris Fekar
  * Date: 2025-11-19
@@ -36,7 +36,7 @@ void PrintUsage(const char* programName)
     std::cout << "  DE  - Nemecke klany" << std::endl;
     std::cout << "  PL  - Polske klany" << std::endl;
     std::cout << "  FR  - Francuzske klany" << std::endl;
-    std::cout << "  ALL - Vsetky ostatne klany (nie CS, DE, PL, FR)" << std::endl;
+    std::cout << "  ALL - Vsetky ostatne klany vratane PL, FR a bez jazyka (nie CS, DE)" << std::endl;
     std::cout << std::endl;
     std::cout << "Priklad:" << std::endl;
     std::cout << "  " << programName << " CS" << std::endl;
@@ -147,6 +147,7 @@ int main(int argc, char* argv[])
          << " Odchody=" << stat.players_left
          << " NoveID=" << stat.new_account_id
          << " Nicky=" << stat.change_nick
+         << " Roly=" << stat.change_role
          << " Ukoncene=" << stat.empty_clan
          << " Updaty=0"
          << " Inserty=0"

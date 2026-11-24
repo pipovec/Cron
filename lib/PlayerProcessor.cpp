@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "PlayerProcessor.h"
 #include "SendCurl.h"
 #include "PlayerNick.h"
@@ -18,6 +19,7 @@ void Statistika::Print() const
     std::cout << "Odchody z klanu \t" << players_left << std::endl;
     std::cout << "Uplne nove ID \t\t" << new_account_id << std::endl;
     std::cout << "Zmeny nickov \t\t" << change_nick << std::endl;
+    std::cout << "Zmeny roly \t\t" << change_role << std::endl;
     std::cout << "Ukoncene klany \t\t" << empty_clan << std::endl;
 }
 
@@ -133,6 +135,14 @@ Spracuj::Spracuj(int clan_id[100], const std::string& json, PGconn* conn, Statis
     while (clan_id[i] != 0) {
         cid = clan_id[i];
 
+        // Kontajnery musia byt prazdne pre kazdy klan. Predtym sa pri prazdnom klane nevycistil
+        // members_role, takze otvorene zaznamy predosleho klanu sa porovnali s dalsim klanom
+        // a nespravne sa ukoncili (a pri dalsom behu znova vlozili -> duplicity).
+        players_all.clear();
+        fresh.clear();
+        members_role.clear();
+        clan_data.clear();
+
         // Natiahne do containeru players_all udaje z databazy
         exec_select_players_all(cid);
 
@@ -231,11 +241,15 @@ void Spracuj::spracuj_members_role(int clan_id, const PlayerMap& members_role_ma
         }
     }
 
-    // Hladam kto je novy v klane
+    // Hladam kto je novy v klane, alebo komu sa zmenila rola
     for (auto it = fresh_map.begin(); it != fresh_map.end(); ++it) {
-        if (members_role_map.count(it->first) == 0) {
-            const Player& fr = it->second;
-            novy_v_klane_members_role(fr.account_id, clan_id, fr.role_i18n);
+        const Player& fr = it->second;
+        auto mr = members_role_map.find(it->first);
+
+        if (mr == members_role_map.end()) {
+            novy_v_klane_members_role(fr.account_id, clan_id, fr.role_i18n, fr.joined_at);
+        } else if (!fr.role_i18n.empty() && mr->second.role_i18n != fr.role_i18n) {
+            zmena_roly_members_role(fr.account_id, clan_id, fr.role_i18n);
         }
     }
 }
@@ -338,7 +352,14 @@ void Spracuj::spracuj_json_map(const std::string& clan_data_input, int* /*member
         begin = clan_data.find("joined_at", end);
         end = clan_data.find(",", begin);
         try {
-            data.joined_at = std::stoi(clan_data.substr(begin + 11, (end - 1) - (begin + 11)));
+            // Cislo (nie string v uvodzovkach) - stoll precita cislice a zastavi sa na ',' alebo '}'.
+            // Povodne (end - 1) odrezalo poslednu cislicu (1423000000 -> 142300000 = rok 1974).
+            long long joined = std::stoll(clan_data.substr(begin + 11, end - (begin + 11)));
+            // Rozumny rozsah: 2010-01-01 .. 2038-01-19 (int), inak 0 (= dnesny datum)
+            data.joined_at = (joined >= 1262304000LL && joined <= 2147483647LL) ? static_cast<int>(joined) : 0;
+            if (data.joined_at == 0) {
+                std::cout << "JSON MAP joined_at mimo rozsahu: " << joined << std::endl;
+            }
         }
         catch (std::exception& e) {
             std::cout << "JSON MAP joined_at error" << std::endl;
@@ -365,36 +386,92 @@ void Spracuj::spracuj_json_map(const std::string& clan_data_input, int* /*member
 }
 
 // Databazove operacie
-void Spracuj::novy_v_klane_members_role(int account_id, int clan_id, const std::string& role)
+void Spracuj::novy_v_klane_members_role(int account_id, int clan_id, const std::string& role, int joined_at)
 {
-    PGresult* result;
+    // odkedy = datum vstupu do klanu podla WG (members.joined_at, unix epoch); ak chyba, dnesny datum.
+    // Jeden prikaz:
+    //  1. cur = posledny zaznam hraca v tomto klane od datumu vstupu (= stale to iste clenstvo,
+    //     napr. po zmene roly); ak existuje, hrac bol nespravne ukonceny -> znovu ho otvori
+    //     (rolu nemeni, pripadnu zmenu roly zachyti dalsi beh ako novy zaznam),
+    //  2. ostatne otvorene zaznamy hraca ukonci k datumu vstupu (nie skor ako ich odkedy),
+    //  3. ak cur neexistuje, vlozi nove clenstvo s odkedy = joined_at.
+    static const char* query =
+        "WITH p AS ("
+        "  SELECT $1::int AS account_id, $2::int AS clan_id, $3::text AS role,"
+        "         CASE WHEN $4::bigint > 0 THEN to_timestamp($4::bigint)::date ELSE current_date END AS odkedy"
+        "), cur AS ("
+        "  SELECT m.odkedy FROM members_role m, p"
+        "  WHERE m.account_id = p.account_id AND m.clan_id = p.clan_id AND m.odkedy >= p.odkedy"
+        "  ORDER BY m.odkedy DESC LIMIT 1"
+        "), closed AS ("
+        "  UPDATE members_role m SET dokedy = GREATEST(m.odkedy, p.odkedy) FROM p"
+        "  WHERE m.account_id = p.account_id AND m.dokedy IS NULL"
+        "    AND m.odkedy IS DISTINCT FROM (SELECT odkedy FROM cur)"
+        "  RETURNING 1"
+        "), reopened AS ("
+        "  UPDATE members_role m SET dokedy = NULL FROM p, cur"
+        "  WHERE m.account_id = p.account_id AND m.odkedy = cur.odkedy"
+        "  RETURNING 1"
+        ")"
+        " INSERT INTO members_role (account_id, clan_id, role, odkedy)"
+        " SELECT account_id, clan_id, role, odkedy FROM p"
+        " WHERE NOT EXISTS (SELECT 1 FROM cur)";
 
-    // Skontroluj ci ma nieco neukoncene
-    std::string q1 = "SELECT * FROM members_role WHERE account_id = " + std::to_string(account_id) + " AND dokedy IS NULL";
+    std::string a_id = std::to_string(account_id);
+    std::string c_id = std::to_string(clan_id);
+    std::string j_at = std::to_string(joined_at);
+    const char* paramValues[4] = {a_id.c_str(), c_id.c_str(), role.c_str(), j_at.c_str()};
 
-    result = PQexec(permanent_connection, q1.c_str());
-    if (PQresultStatus(result) != PGRES_TUPLES_OK) {
-        std::cout << "Chyba select members_role " << PQresultErrorMessage(result) << std::endl;
-    }
-
-    int rows = PQntuples(result);
-    PQclear(result);
-
-    if (rows >= 1) {
-        std::string q2 = "UPDATE members_role SET dokedy = now() WHERE dokedy IS NULL AND account_id = " + std::to_string(account_id);
-        result = PQexec(permanent_connection, q2.c_str());
-        if (PQresultStatus(result) != PGRES_COMMAND_OK) {
-            std::cout << "Chyba update members_role stare dokedy " << PQresultErrorMessage(result) << std::endl;
-        }
-        PQclear(result);
-    }
-
-    // Vlozim nove udaje
-    std::string q3 = "INSERT INTO members_role (account_id,clan_id,role,odkedy) VALUES (" +
-                     std::to_string(account_id) + "," + std::to_string(clan_id) + ",'" + role + "', now())";
-    result = PQexec(permanent_connection, q3.c_str());
+    PGresult* result = PQexecParams(permanent_connection, query, 4, nullptr, paramValues, nullptr, nullptr, 0);
     if (PQresultStatus(result) != PGRES_COMMAND_OK) {
         std::cout << "Chyba insert members_role " << PQresultErrorMessage(result) << std::endl;
+    }
+    PQclear(result);
+}
+
+void Spracuj::zmena_roly_members_role(int account_id, int clan_id, const std::string& role)
+{
+    // Zmena roly v tom istom klane: WG neposkytuje datum zmeny, preto odkedy = dnes.
+    //  - otvoreny zaznam zacaty dnes (vstup alebo zmena roly dnes) -> iba prepise rolu,
+    //  - inak ukonci otvoreny zaznam dnesnym dnom a vlozi novy s novou rolou.
+    static const char* query =
+        "WITH p AS (SELECT $1::int AS account_id, $2::int AS clan_id, $3::text AS role"
+        "), same_day AS ("
+        "  UPDATE members_role m SET role = p.role FROM p"
+        "  WHERE m.account_id = p.account_id AND m.clan_id = p.clan_id AND m.dokedy IS NULL"
+        "    AND m.odkedy >= current_date"
+        "  RETURNING 1"
+        "), closed AS ("
+        "  UPDATE members_role m SET dokedy = current_date FROM p"
+        "  WHERE m.account_id = p.account_id AND m.clan_id = p.clan_id AND m.dokedy IS NULL"
+        "    AND m.odkedy < current_date"
+        "  RETURNING 1"
+        ")"
+        " INSERT INTO members_role (account_id, clan_id, role, odkedy)"
+        " SELECT account_id, clan_id, role, current_date FROM p"
+        " WHERE NOT EXISTS (SELECT 1 FROM same_day) AND EXISTS (SELECT 1 FROM closed)";
+
+    // ROLE_SYNC_INPLACE=1: jednorazova synchronizacia rol bez historie (skutocny datum zmeny
+    // nepozname) - iba prepise rolu v otvorenom zazname. Pouzite 2026-11-24 pri zavedeni
+    // sledovania rol, ked mali stare zaznamy stale rolu z prichodu.
+    static const char* query_inplace =
+        "UPDATE members_role SET role = $3"
+        " WHERE account_id = $1::int AND clan_id = $2::int AND dokedy IS NULL";
+    static const bool inplace = [] {
+        const char* v = std::getenv("ROLE_SYNC_INPLACE");
+        return v != nullptr && std::string(v) == "1";
+    }();
+
+    std::string a_id = std::to_string(account_id);
+    std::string c_id = std::to_string(clan_id);
+    const char* paramValues[3] = {a_id.c_str(), c_id.c_str(), role.c_str()};
+
+    PGresult* result = PQexecParams(permanent_connection, inplace ? query_inplace : query, 3,
+                                    nullptr, paramValues, nullptr, nullptr, 0);
+    if (PQresultStatus(result) != PGRES_COMMAND_OK) {
+        std::cout << "Chyba zmena roly members_role " << PQresultErrorMessage(result) << std::endl;
+    } else {
+        stat.change_role++;
     }
     PQclear(result);
 }

@@ -71,8 +71,9 @@ private:
     void spracuj_json_map(const std::string& clan_data, int* members_count);
 
     // Databazove operacie
-    void novy_v_klane_members_role(int account_id, int clan_id, const std::string& role);
+    void novy_v_klane_members_role(int account_id, int clan_id, const std::string& role, int joined_at);
     void nie_je_v_klane_members_role(int account_id);
+    void zmena_roly_members_role(int account_id, int clan_id, const std::string& role);
     void zmena_nick_players_all(const std::string& old_name, const std::string& new_name, int account_id);
     void nie_je_v_klane_players_all(int account_id);
     void novy_v_klane_players_all(int account_id, int clan_id, const std::string& account_name);

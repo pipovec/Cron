@@ -28,7 +28,7 @@ make Players
 - **DE** - Nemecké klany (language='de')
 - **PL** - Poľské klany (language='pl')
 - **FR** - Francúzske klany (language='fr')
-- **ALL** - Všetky ostatné klany (nie CS, DE, PL, FR)
+- **ALL** - Všetky ostatné klany vrátane PL, FR a klanov bez jazyka (language IS NULL) (nie CS, DE, ani klany z tmp_clans_cs/tmp_clans_de); PL a FR sa samostatne nespúšťajú
 
 ### Príklady
 
