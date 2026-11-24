@@ -28,6 +28,8 @@ struct JobConfig
                                  // (strankuje sa keysetom podla account_id)
     bool run_cleanup = false;    // mazanie *_history starsich ako 2 mesiace
     bool apply_env_limit = false; // respektovat PLAYERSSTAT_LIMIT env
+    bool write_mongo = false;    // zapisovat aj MongoDB fpcstat.player-stats (nahrada PHP
+                                 // cron:player-stats-mongo); prihlasenie v ~/.config/crons/mongodb.yaml
 };
 
 int RunJob(const JobConfig &config);

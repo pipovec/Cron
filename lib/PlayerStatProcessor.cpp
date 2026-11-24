@@ -1,6 +1,10 @@
 #include "./PlayerStatProcessor.h"
 
 #include <array>
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <unistd.h>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
@@ -127,9 +131,13 @@ static void GetAccountId(size_t start, size_t end, const container &account_ids,
 
 // Poslanie dat account_id na server a ziskanie JSON.
 // Pri sietovej chybe (po opakovaniach v SendWOT) vrati prazdny JSON - davka sa preskoci.
-static void SendPost(SendCurl &send, const string &aids, string *json)
+// mongo_fields: navyse statistics.clan, clan_id, global_rating, last_battle_time,
+// created_at, updated_at pre dokument v MongoDB.
+static void SendPost(SendCurl &send, const string &aids, string *json, bool mongo_fields)
 {
-    string field = "&fields=-statistics.historical,-statistics.clan,-statistics.regular_team,-statistics.fallout,-statistics.team,-statistics.company,-clan_id,-global_rating,-client_language,-last_battle_time,-created_at,-updated_at";
+    string field = mongo_fields
+        ? "&fields=-statistics.historical,-statistics.regular_team,-statistics.fallout,-statistics.team,-statistics.company,-client_language"
+        : "&fields=-statistics.historical,-statistics.clan,-statistics.regular_team,-statistics.fallout,-statistics.team,-statistics.company,-clan_id,-global_rating,-client_language,-last_battle_time,-created_at,-updated_at";
     string extra = "&extra=statistics.globalmap_absolute,statistics.globalmap_champion";
     const string method = "/account/info/";
 
@@ -151,6 +159,190 @@ static void SendPost(SendCurl &send, const string &aids, string *json)
         cout << "SendPost: " << e.what() << " - davku preskakujem" << endl;
     }
 }
+
+// ---------------------------------------------------------------------------------
+// MongoDB fpcstat.player-stats (predtym PHP admin cron:player-stats-mongo).
+//
+// Bez C/C++ drivera: na zaciatku behu mongoexport stiahne (_id, updated_at) vsetkych
+// dokumentov, pocas behu sa zmenene dokumenty posielaju ako Extended JSON do rury
+// "mongoimport --mode=upsert" (nahradi cely dokument podla _id). Zapisuje sa len hrac,
+// ktoremu sa zmenil WG updated_at alebo v Mongo este nie je (rovnako ako PHP).
+// Prihlasenie (uri) je v YAML pre --config, aby heslo nebolo vidiet v zozname procesov.
+//   PLAYERSSTAT_NOMONGO=1  zapis do Mongo vypne
+//   MONGO_FULL=1           zapise vsetkych hracov bez ohladu na updated_at
+//   MONGO_TOOLS_CONFIG     cesta ku konfiguracii (default ~/.config/crons/mongodb.yaml)
+//   MONGO_COLLECTION       ina kolekcia namiesto player-stats (testovanie)
+class MongoSync
+{
+public:
+    long long written = 0;
+    long long skipped = 0;
+
+    bool Enabled() const { return pipe_ != nullptr; }
+
+    bool Open()
+    {
+        const char *cfg_env = std::getenv("MONGO_TOOLS_CONFIG");
+        const char *home = std::getenv("HOME");
+        config_ = cfg_env && *cfg_env ? string(cfg_env)
+                                      : string(home ? home : "") + "/.config/crons/mongodb.yaml";
+        if (access(config_.c_str(), R_OK) != 0)
+        {
+            cout << "Mongo: konfiguracia " << config_ << " neexistuje - zapis do Mongo vypnuty" << endl;
+            return false;
+        }
+        const char *full = std::getenv("MONGO_FULL");
+        full_ = full && *full && *full != '0';
+
+        if (!full_ && !LoadUpdatedAt())
+            return false;
+
+        // Rura do mongoimport; ak importer spadne, zapis do rury nesmie zabit proces signalom
+        signal(SIGPIPE, SIG_IGN);
+        const string cmd = "mongoimport --config='" + config_ + "' --db=fpcstat --collection=" + Collection() +
+                           " --mode=upsert --type=json --quiet --numInsertionWorkers=2";
+        pipe_ = popen(cmd.c_str(), "w");
+        if (pipe_ == nullptr)
+        {
+            cout << "Mongo: mongoimport sa nepodarilo spustit - zapis do Mongo vypnuty" << endl;
+            return false;
+        }
+        cout << "Mongo: zapis zapnuty" << (full_ ? " (MONGO_FULL - vsetci hraci)" : "")
+             << ", dokumentov v Mongo: " << updated_at_.size() << endl;
+        return true;
+    }
+
+    // Zapise dokument hraca, ak sa zmenil (podla WG updated_at)
+    void Write(long long account_id, const nlohmann::json &p)
+    {
+        if (pipe_ == nullptr)
+            return;
+
+        const long long upd = EpochOrZero(p, "updated_at");
+        if (!full_)
+        {
+            auto it = updated_at_.find(account_id);
+            if (it != updated_at_.end() && it->second == upd)
+            {
+                skipped++;
+                return;
+            }
+        }
+
+        nlohmann::json doc;
+        doc["_id"] = account_id;
+        doc["last_battle_time"] = DateOrNull(p, "last_battle_time");
+        doc["created_at"] = DateOrNull(p, "created_at");
+        doc["updated_at"] = DateOrNull(p, "updated_at");
+        doc["record_updated_at"] = Date(static_cast<long long>(time(nullptr)));
+        doc["global_rating"] = p.contains("global_rating") ? p["global_rating"] : nlohmann::json(nullptr);
+        doc["clan_id"] = p.contains("clan_id") && p["clan_id"].is_number() ? p["clan_id"] : nlohmann::json(0);
+
+        auto st = p.find("statistics");
+        if (st != p.end() && st->is_object())
+        {
+            if (st->contains("all") && (*st)["all"].is_object())
+                doc["all"] = (*st)["all"];
+            if (st->contains("clan") && (*st)["clan"].is_object())
+                doc["clan"] = (*st)["clan"];
+        }
+
+        const string line = doc.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace) + "\n";
+        if (fwrite(line.data(), 1, line.size(), pipe_) != line.size())
+        {
+            cout << "Mongo: zapis do mongoimport zlyhal - dalsie dokumenty sa preskocia" << endl;
+            pclose(pipe_);
+            pipe_ = nullptr;
+            failed_ = true;
+            return;
+        }
+        written++;
+    }
+
+    // Vracia true, ak mongoimport skoncil uspesne
+    bool Close()
+    {
+        if (pipe_ == nullptr)
+            return !failed_;
+        int rc = pclose(pipe_);
+        pipe_ = nullptr;
+        if (rc != 0)
+        {
+            cout << "Mongo: mongoimport skoncil s chybou (rc=" << rc << ")" << endl;
+            failed_ = true;
+        }
+        return !failed_;
+    }
+
+private:
+    FILE *pipe_ = nullptr;
+    bool full_ = false;
+    bool failed_ = false;
+    string config_;
+    unordered_map<long long, long long> updated_at_;
+
+    // MONGO_COLLECTION prepise cielovu kolekciu (na testovanie), povolene len [A-Za-z0-9_-]
+    static string Collection()
+    {
+        const char *c = std::getenv("MONGO_COLLECTION");
+        if (c == nullptr || *c == '\0' || strspn(c, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != strlen(c))
+            return "player-stats";
+        return c;
+    }
+
+    static nlohmann::json Date(long long epoch_s)
+    {
+        return {{"$date", {{"$numberLong", to_string(epoch_s * 1000)}}}};
+    }
+    static long long EpochOrZero(const nlohmann::json &p, const char *key)
+    {
+        auto it = p.find(key);
+        return (it != p.end() && it->is_number()) ? it->get<long long>() : 0;
+    }
+    static nlohmann::json DateOrNull(const nlohmann::json &p, const char *key)
+    {
+        auto it = p.find(key);
+        if (it == p.end() || !it->is_number())
+            return nullptr;
+        return Date(it->get<long long>());
+    }
+
+    // _id,updated_at vsetkych dokumentov (updated_at ako 2026-11-22T22:12:09.000Z)
+    bool LoadUpdatedAt()
+    {
+        const string cmd = "mongoexport --config='" + config_ + "' --db=fpcstat --collection=" + Collection() +
+                           " --fields=_id,updated_at --type=csv --noHeaderLine --quiet";
+        FILE *in = popen(cmd.c_str(), "r");
+        if (in == nullptr)
+        {
+            cout << "Mongo: mongoexport sa nepodarilo spustit - zapis do Mongo vypnuty" << endl;
+            return false;
+        }
+        updated_at_.reserve(2500000);
+        char buf[256];
+        while (fgets(buf, sizeof(buf), in) != nullptr)
+        {
+            char *comma = strchr(buf, ',');
+            if (comma == nullptr)
+                continue;
+            *comma = '\0';
+            long long id = atoll(buf);
+            struct tm tm_ = {};
+            long long epoch = 0;
+            if (strptime(comma + 1, "%Y-%m-%dT%H:%M:%S", &tm_) != nullptr)
+                epoch = static_cast<long long>(timegm(&tm_));
+            if (id > 0)
+                updated_at_[id] = epoch;
+        }
+        int rc = pclose(in);
+        if (rc != 0)
+        {
+            cout << "Mongo: mongoexport skoncil s chybou (rc=" << rc << ") - zapis do Mongo vypnuty" << endl;
+            return false;
+        }
+        return true;
+    }
+};
 
 // Statistiky jednej tabulky: damage_dealt, spotted, frags, dropped_capture_points,
 // battles, wins, battle_avg_xp (v tomto poradi)
@@ -354,7 +546,7 @@ static void InsertDeadPlayer(PGconn *conn, const string &account_id)
 
 // Spracovanie JSON odpovede zo servera pre az 100 hracov naraz.
 // Vracia pocet uctov, ktore server nahlasil ako vymazane (null).
-static int ProcessJson(const string &json_data, PGconn *conn)
+static int ProcessJson(const string &json_data, PGconn *conn, MongoSync *mongo)
 {
     if (json_data.empty())
     {
@@ -422,6 +614,9 @@ static int ProcessJson(const string &json_data, PGconn *conn)
 
         for (int ti = 0; ti < kTableCount; ti++)
             p.ok[ti] = ExtractBattleStats(j, p.stat[ti], kJsonKeys[ti]);
+
+        if (mongo != nullptr)
+            mongo->Write(p.account_id, j);
 
         players.push_back(std::move(p));
     }
@@ -522,6 +717,12 @@ int RunJob(const JobConfig &config)
     container a_ids;
     SendCurl send; // jedno spojenie (keep-alive) pre cely beh
 
+    // MongoDB fpcstat.player-stats (iba ak je zapnute v JobConfig a nie je PLAYERSSTAT_NOMONGO=1)
+    MongoSync mongo_sync;
+    const char *nomongo_env = std::getenv("PLAYERSSTAT_NOMONGO");
+    const bool want_mongo = config.write_mongo && !(nomongo_env && *nomongo_env && *nomongo_env != '0');
+    MongoSync *mongo = (want_mongo && mongo_sync.Open()) ? &mongo_sync : nullptr;
+
     int ntuples = 0;
     int spracovanych = 0;
     int kolo = 0;
@@ -552,8 +753,8 @@ int RunJob(const JobConfig &config)
             GetAccountId(start_idx, end_idx, a_ids, &aids);
             if (!aids.empty())
             {
-                SendPost(send, aids, &json_response);
-                mrtvi += ProcessJson(json_response, players.conn);
+                SendPost(send, aids, &json_response, want_mongo);
+                mrtvi += ProcessJson(json_response, players.conn, mongo);
             }
         }
 
@@ -564,6 +765,19 @@ int RunJob(const JobConfig &config)
     if (mrtvi > 0)
     {
         cout << "Vymazanych uctov najdenych: " << mrtvi << endl;
+    }
+
+    string mongo_info = "off";
+    if (mongo != nullptr)
+    {
+        const bool ok = mongo->Close();
+        cout << "Mongo: zapisanych " << mongo->written << ", bez zmeny " << mongo->skipped
+             << (ok ? "" : " - CHYBA importu") << endl;
+        mongo_info = to_string(mongo->written) + "/" + to_string(mongo->skipped) + (ok ? "" : "/CHYBA");
+    }
+    else if (want_mongo)
+    {
+        mongo_info = "CHYBA";
     }
 
     // PLAYERSSTAT_NOCLEANUP=1 preskoci mazanie historie (na testovanie)
@@ -601,6 +815,8 @@ int RunJob(const JobConfig &config)
          << " MissingVehicles=0"
          << " Neaktivne=0"
          << " MrtviHraci=" << mrtvi;
+    if (config.write_mongo)
+        info << " Mongo=" << mongo_info;
     cron_log.SetInfo(info.str());
 
     return 0;
