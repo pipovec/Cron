@@ -18,6 +18,16 @@ Vypocet: citatel (wins, damage, frags, spot, def) pochadza zo suctov `players_st
 za okno; menovatel je Σ `expected_tank_value × dennych prirastkov bitiek` z `player_vehicle_daily`.
 Pocita sa len random bitky (`account/tanks` ich tak vracia).
 
+**Tanky bez hodnot v `expected_tank_value`** (nove alebo zvlastne tanky) nema z coho vyhodnotit, preto:
+- ak je podiel bitiek na tankoch s ocakavanymi hodnotami (`eb / battles`) pod `WN8R_MIN_COVERAGE`,
+  hrac sa vyradi (vypis "bez ocakavanych hodnot"),
+- inak sa vyhry na takych tankoch odpocitaju presne (`player_vehicle_daily.wins`) a damage, spot, frags a
+  def (v historii su len ako sucet za hraca, nie po tankoch) sa vynasobia podielom `eb / battles`.
+  Je to priblizenie: predpoklada rovnaky priemer na neznamych tankoch ako na ostatnych.
+
+Bez tohto by hrac s vacsinou bitiek na neznamych tankoch mal citatel z vsetkych bitiek, ale menovatel
+len z par - WN8 v stovkach tisic.
+
 ## Tabulky (`sql/`)
 
 | Subor | Tabulky |
@@ -85,7 +95,7 @@ Chrani sa advisory lockom (727001), takze dva behy naraz nehrozia. Podozrive del
 |---|---|---|
 | `WN8R_PERIODS` | `7,14,28` | ktore okna pocitat |
 | `WN8R_MIN_BATTLES` | 20 | minimum bitiek v okne |
-| `WN8R_MIN_COVERAGE` | 90 | minimalne pokrytie (%) bitiek z historie dennymi deltami |
+| `WN8R_MIN_COVERAGE` | 90 | minimalne pokrytie (%) bitiek z historie dennymi deltami; rovnaky prah plati aj pre podiel bitiek na tankoch s `expected_tank_value` |
 | `WN8R_END_DATE` | dnes | koniec okna (`YYYY-MM-DD`) |
 | `WN8R_DRY_RUN` | | nic nezapisuje |
 
