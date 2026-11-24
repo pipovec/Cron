@@ -600,7 +600,7 @@ static void InsertDeadPlayer(PGconn *conn, const string &account_id)
 
 // Spracovanie JSON odpovede zo servera pre az 100 hracov naraz.
 // Vracia pocet uctov, ktore server nahlasil ako vymazane (null).
-static int ProcessJson(const string &json_data, PGconn *conn, MongoSync *mongo)
+static int ProcessJson(const string &json_data, PGconn *conn, MongoSync *mongo, bool write_gr)
 {
     if (json_data.empty())
     {
@@ -637,6 +637,7 @@ static int ProcessJson(const string &json_data, PGconn *conn, MongoSync *mongo)
     const json &data = js.at("data");
 
     int dead_count = 0;
+    vector<long long> gr_ids, gr_values; // global_rating pre players_stat_all
     vector<PlayerStats> players;
     players.reserve(data.size());
 
@@ -672,11 +673,36 @@ static int ProcessJson(const string &json_data, PGconn *conn, MongoSync *mongo)
         if (mongo != nullptr)
             mongo->Write(p.account_id, j);
 
+        if (write_gr)
+        {
+            auto gr = j.find("global_rating");
+            if (gr != j.end() && gr->is_number())
+            {
+                gr_ids.push_back(p.account_id);
+                gr_values.push_back(gr->get<long long>());
+            }
+        }
+
         players.push_back(std::move(p));
     }
 
     for (int ti = 0; ti < kTableCount; ti++)
         WriteTable(conn, ti, players);
+
+    // global_rating az po WriteTable (novi hraci uz maju riadok v players_stat_all)
+    if (!gr_ids.empty())
+    {
+        const string ids = PgArray(gr_ids), vals = PgArray(gr_values);
+        const char *params[2] = {ids.c_str(), vals.c_str()};
+        PGresult *r = PQexecParams(conn,
+                                   "UPDATE players_stat_all t SET global_rating = v.g "
+                                   "FROM unnest($1::bigint[], $2::bigint[]) AS v(id, g) "
+                                   "WHERE t.account_id = v.id AND t.global_rating IS DISTINCT FROM v.g",
+                                   2, nullptr, params, nullptr, nullptr, 0);
+        if (PQresultStatus(r) != PGRES_COMMAND_OK)
+            cout << "Chyba update global_rating: " << PQresultErrorMessage(r) << endl;
+        PQclear(r);
+    }
 
     PGresult *txc = PQexec(conn, "COMMIT");
     PQclear(txc);
@@ -807,8 +833,8 @@ int RunJob(const JobConfig &config)
             GetAccountId(start_idx, end_idx, a_ids, &aids);
             if (!aids.empty())
             {
-                SendPost(send, aids, &json_response, want_mongo);
-                mrtvi += ProcessJson(json_response, players.conn, mongo);
+                SendPost(send, aids, &json_response, want_mongo || config.write_global_rating);
+                mrtvi += ProcessJson(json_response, players.conn, mongo, config.write_global_rating);
             }
         }
 

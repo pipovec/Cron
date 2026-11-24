@@ -37,7 +37,7 @@ std::vector<PlayerData> PlayerDataCollector::getBasicPlayerInfo()
         SELECT DISTINCT
             foo.account_id,
             players_all.nickname,
-            COALESCE(players_info.global_rating, 0) as global_rating,
+            COALESCE(ps_gr.global_rating, 0) as global_rating,
             COALESCE(wn8player.wn8, 0) as wn8
         FROM (
             SELECT DISTINCT account_id
@@ -45,7 +45,7 @@ std::vector<PlayerData> PlayerDataCollector::getBasicPlayerInfo()
             WHERE clan_id IN (SELECT clan_id FROM tmp_clans_cs)
         ) as foo
         JOIN players_all ON foo.account_id = players_all.account_id
-        LEFT JOIN players_info ON foo.account_id = players_info.account_id
+        LEFT JOIN players_stat_all ps_gr ON foo.account_id = ps_gr.account_id
         LEFT JOIN wn8player ON foo.account_id = wn8player.account_id
         WHERE players_all.clan_id = 0
     )";

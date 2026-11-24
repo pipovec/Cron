@@ -20,6 +20,7 @@ int main()
     cfg.source_table = "players_all";
     cfg.run_cleanup = true;
     cfg.apply_env_limit = true;
+    cfg.write_global_rating = true; // players_stat_all.global_rating (predtym PlayersInfo2 -> players_info)
     cfg.write_mongo = true; // MongoDB fpcstat.player-stats (nahrada PHP cron:player-stats-mongo)
 
     return PlayerStatProcessing::RunJob(cfg);
